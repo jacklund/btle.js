@@ -29,8 +29,10 @@ Handle<String> BTLEConnection::getKey(const char* value) {
   return Handle<String>(String::New(value));
 }
 
+static char stringBuffer[1024];
 const char* BTLEConnection::getStringValue(Local<String> string) {
-  return *String::Utf8Value(string);
+  string->WriteUtf8(stringBuffer, sizeof(stringBuffer));
+  return stringBuffer;
 }
 
 bool BTLEConnection::getIntValue(Local<Number> number, int& intValue) {
@@ -362,6 +364,7 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args) {
 
   if (conn->handle == NULL) {
     // Throw exception
+    ThrowException(Exception::TypeError(String::New("Connection handle is null")));
   }
 
   return scope.Close(Undefined());

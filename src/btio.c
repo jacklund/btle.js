@@ -113,6 +113,7 @@ static int l2cap_connect(uv_poll_t *handle, uv_poll_cb connect_cb, void* data, c
 	int err;
 	struct sockaddr_l2 addr;
 
+	printf("dst = %x\n", *dst);
 	memset(&addr, 0, sizeof(addr));
 	addr.l2_family = AF_BLUETOOTH;
 	bacpy(&addr.l2_bdaddr, dst);
@@ -1002,6 +1003,7 @@ static uv_poll_t *create_handle(bool server, struct set_opts *opts)
 	}
 
 	handle = malloc(sizeof(uv_poll_t));
+	memset(handle, 0, sizeof(uv_poll_t));
 	uv_poll_init_socket(uv_default_loop(), handle, sock);
 
 	return handle;

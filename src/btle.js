@@ -1,2 +1,2 @@
-var BTConnection = require('./btConnection.js');
+var BTConnection = require('./btleConnection.js');
 

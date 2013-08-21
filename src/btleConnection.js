@@ -1,5 +1,5 @@
 // javascript shim that lets our object inherit from EventEmitter
-var BTLEConnection = require('../build/Debug/BTLEConnection.node').BTLEConnection;
+var BTLEConnection = require('../build/Debug/btleConnection.node').BTLEConnection;
 var events = require('events');
 
 inherits(BTLEConnection, events.EventEmitter);

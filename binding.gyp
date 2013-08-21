@@ -8,7 +8,7 @@
         ],
       "link_settings": {
         "libraries": [
-          "-lbluetooth", "../../libuv/out/Debug/libuv.a"
+          "-lbluetooth"
           ]
       }
 
