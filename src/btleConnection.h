@@ -8,7 +8,9 @@ public:
   static void Init();
   static v8::Handle<v8::Value> New(const v8::Arguments& args);
   static v8::Handle<v8::Value> Connect(const v8::Arguments& args);
+  static v8::Handle<v8::Value> ReadHandle(const v8::Arguments& args);
   static v8::Handle<v8::Value> Write(const v8::Arguments& args);
+  static v8::Handle<v8::Value> Close(const v8::Arguments& args);
 
   v8::Persistent<v8::Object> getHandle();
 
@@ -32,6 +34,7 @@ protected:
   static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
   static void write_cb(uv_write_t* req, int status);
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);
+  static void close_cb(uv_handle_t* handle);
 
 private:
   static v8::Persistent<v8::Function> constructor;
@@ -39,6 +42,7 @@ private:
   uv_poll_t* handle;
   uv_tcp_t* tcp;
   v8::Persistent<v8::Function> connectionCallback;
+  v8::Persistent<v8::Function> closeCallback;
 };
 
 #endif

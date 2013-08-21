@@ -16,6 +16,22 @@ static uv_buf_t alloc_cb(uv_handle_t* handle, size_t suggested);
 
 Persistent<Function> BTLEConnection::constructor;
 
+static uint16_t enc_read_req(uint16_t handle, uint8_t *pdu, size_t len)
+{
+	const uint16_t min_len = sizeof(pdu[0]) + sizeof(handle);
+
+	if (pdu == NULL)
+		return 0;
+
+	if (len < min_len)
+		return 0;
+
+	pdu[0] = ATT_OP_READ_REQ;
+	att_put_u16(handle, &pdu[1]);
+
+	return min_len;
+}
+
 void BTLEConnection::Init() {
   // Prepare constructor template
   Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
@@ -370,6 +386,27 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
+Handle<Value> BTLEConnection::ReadHandle(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 2) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("First argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[1]->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New("Second argument must be a callback")));
+    return scope.Close(Undefined());
+  }
+
+  return scope.Close(Undefined());
+}
+
 Handle<Value> BTLEConnection::Write(const Arguments& args) {
   HandleScope scope;
 
@@ -412,6 +449,31 @@ Handle<Value> BTLEConnection::Write(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
+Handle<Value> BTLEConnection::Close(const Arguments& args) {
+  HandleScope scope;
+
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  if (args.Length() > 0) {
+    if (!args[0]->IsFunction()) {
+      ThrowException(Exception::TypeError(String::New("Argument must be a callback")));
+      return scope.Close(Undefined());
+    } else {
+      Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
+      callback.MakeWeak(*callback, weak_cb);
+      conn->closeCallback = callback;
+    }
+  }
+
+  if (conn->tcp) {
+    printf("Calling uv_close\n");
+    uv_close((uv_handle_t*) conn->tcp, close_cb);
+    printf("Called uv_close\n");
+  }
+
+  return scope.Close(Undefined());
+}
+
 // Emit an 'error' event
 void BTLEConnection::emit_error() {
     uv_err_t err = uv_last_error(uv_default_loop());
@@ -419,7 +481,7 @@ void BTLEConnection::emit_error() {
     Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
     Local<Value> argv[argc] = { String::New("error"),
                                 error };
-    MakeCallback(this->handle_, "emit", argc, argv);
+    MakeCallback(this->getHandle(), "emit", argc, argv);
 }
 
 Persistent<Object> BTLEConnection::getHandle() {
@@ -431,6 +493,7 @@ void BTLEConnection::connect_cb(uv_poll_t* handle, int status, int events) {
   printf("connect_cb called, status = %d, events = %d\n", status, events);
   // Stop polling
   uv_poll_stop(handle);
+  uv_close((uv_handle_t*) handle, close_cb);
   BTLEConnection* conn = (BTLEConnection *) handle->data;
   if (status == 0) {
 
@@ -446,7 +509,7 @@ void BTLEConnection::connect_cb(uv_poll_t* handle, int status, int events) {
       // Emit a 'connect' event, with no args
       const int argc = 1;
       Local<Value> argv[argc] = { String::New("connect") };
-      MakeCallback(conn->handle_, "emit", argc, argv);
+      MakeCallback(conn->getHandle(), "emit", argc, argv);
     } else {
       const int argc = 1;
       Local<Value> argv[argc] = { Local<Value>::New(Null()) };
@@ -503,11 +566,27 @@ void BTLEConnection::read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
   }
 }
 
+void BTLEConnection::close_cb(uv_handle_t* handle) {
+  BTLEConnection* conn = (BTLEConnection *) handle->data;
+
+  if (conn->closeCallback.IsEmpty()) {
+    // Emit a 'close' event, with no args
+    const int argc = 1;
+    Local<Value> argv[argc] = { String::New("close") };
+    MakeCallback(conn->getHandle(), "emit", argc, argv);
+  } else {
+    const int argc = 1;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()) };
+    conn->closeCallback->Call(Context::GetCurrent()->Global(), argc, argv);
+  }
+}
+
 extern "C" void init(Handle<Object> exports) {
   Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
   t->InstanceTemplate()->SetInternalFieldCount(2);
   t->SetClassName(String::New("BTLEConnection"));
   NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
+  NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
   NODE_SET_PROTOTYPE_METHOD(t, "write", BTLEConnection::Write);
 
   exports->Set(String::NewSymbol("BTLEConnection"), t->GetFunction());
