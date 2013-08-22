@@ -184,15 +184,15 @@ static inline void att_put_u16(uint16_t src, void *dst)
 	bt_put_unaligned(htobs(src), (uint16_t *) dst);
 }
 
-bool bt_io_accept(uv_poll_t *handle, uv_poll_cb connect);
+bool bt_io_accept(int sock);
 
-bool bt_io_set(uv_poll_t *handle, struct set_opts *opts);
+bool bt_io_set(int sock, struct set_opts *opts);
 
-bool bt_io_get(uv_poll_t *handle, BtIOOption opt1, ...);
+bool bt_io_get(int sock, BtIOOption opt1, ...);
 
-uv_poll_t *bt_io_connect(uv_poll_cb connect_cb, void* data, struct set_opts* opts);
+int bt_io_connect(struct set_opts* opts);
 
-uv_poll_t *bt_io_listen(uv_connection_cb connect, void* data, struct set_opts* opts);
+int bt_io_listen(struct set_opts* opts);
 
 #ifdef __cplusplus
 }

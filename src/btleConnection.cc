@@ -376,12 +376,19 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args) {
     return scope.Close(Undefined());
   }
 
-  conn->handle = bt_io_connect(connect_cb, (void*) conn, &opts);
+  //conn->handle = bt_io_connect(connect_cb, (void*) conn, &opts);
+  int sock = bt_io_connect(&opts);
 
-  if (conn->handle == NULL) {
+  if (sock == -1) {
     // Throw exception
     ThrowException(Exception::TypeError(String::New("Connection handle is null")));
   }
+
+  conn->handle = (uv_poll_t*) malloc(sizeof(uv_poll_t));
+  memset(conn->handle, 0, sizeof(uv_poll_t));
+  conn->handle->data = conn;
+  uv_poll_init_socket(uv_default_loop(), conn->handle, sock);
+  uv_poll_start(conn->handle, UV_WRITABLE, connect_cb);
 
   return scope.Close(Undefined());
 }
