@@ -12,25 +12,7 @@
 using namespace v8;
 using namespace node;
 
-static uv_buf_t alloc_cb(uv_handle_t* handle, size_t suggested);
-
 Persistent<Function> BTLEConnection::constructor;
-
-static uint16_t enc_read_req(uint16_t handle, uint8_t *pdu, size_t len)
-{
-	const uint16_t min_len = sizeof(pdu[0]) + sizeof(handle);
-
-	if (pdu == NULL)
-		return 0;
-
-	if (len < min_len)
-		return 0;
-
-	pdu[0] = ATT_OP_READ_REQ;
-	att_put_u16(handle, &pdu[1]);
-
-	return min_len;
-}
 
 void BTLEConnection::Init() {
   // Prepare constructor template
@@ -96,8 +78,6 @@ bool BTLEConnection::setOpts(struct set_opts& opts, Local<Object> options) {
   if (options->Has(key)) {
     if (!getSourceAddr(key, options, opts)) return false;
   } else {
-    // BDADDR_ANY
-    //memset(&opts.src, 0, sizeof(opts.src));
 		bacpy(&opts.src, BDADDR_ANY);
   }
 
@@ -376,19 +356,9 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args) {
     return scope.Close(Undefined());
   }
 
-  //conn->handle = bt_io_connect(connect_cb, (void*) conn, &opts);
-  int sock = bt_io_connect(&opts);
-
-  if (sock == -1) {
-    // Throw exception
-    ThrowException(Exception::TypeError(String::New("Connection handle is null")));
-  }
-
-  conn->handle = (uv_poll_t*) malloc(sizeof(uv_poll_t));
-  memset(conn->handle, 0, sizeof(uv_poll_t));
-  conn->handle->data = conn;
-  uv_poll_init_socket(uv_default_loop(), conn->handle, sock);
-  uv_poll_start(conn->handle, UV_WRITABLE, connect_cb);
+  conn->gatt = new Gatt();
+  //conn->gatt->onError(error_cb, (void*) conn);
+  conn->gatt->connect(opts, connect_cb, (void*) conn);
 
   return scope.Close(Undefined());
 }
@@ -472,10 +442,8 @@ Handle<Value> BTLEConnection::Close(const Arguments& args) {
     }
   }
 
-  if (conn->tcp) {
-    printf("Calling uv_close\n");
-    uv_close((uv_handle_t*) conn->tcp, close_cb);
-    printf("Called uv_close\n");
+  if (conn->gatt) {
+    conn->gatt->close(close_cb, (void*) conn);
   }
 
   return scope.Close(Undefined());
@@ -496,27 +464,15 @@ Persistent<Object> BTLEConnection::getHandle() {
 }
 
 // Callback executed when we get connected
-void BTLEConnection::connect_cb(uv_poll_t* handle, int status, int events) {
-  printf("connect_cb called, status = %d, events = %d\n", status, events);
-  // Stop polling
-  uv_poll_stop(handle);
-  uv_close((uv_handle_t*) handle, close_cb);
-  BTLEConnection* conn = (BTLEConnection *) handle->data;
+void BTLEConnection::connect_cb(void* data, int status, int events) {
+  printf("BTLEConnection::connect_cb called, data = %x, status = %d, events = %d\n", data, status, events);
+  BTLEConnection* conn = (BTLEConnection *) data;
   if (status == 0) {
-
-    // Convert to a TCP handle, and start reading
-    int fd = handle->io_watcher.fd;
-    conn->tcp = new uv_tcp_t();
-    uv_tcp_init(uv_default_loop(), conn->tcp);
-    uv_tcp_open(conn->tcp, fd);
-    conn->tcp->data = (void*) conn;
-    uv_read_start((uv_stream_t*) conn->tcp, alloc_cb, read_cb);
-
     if (conn->connectionCallback.IsEmpty()) {
       // Emit a 'connect' event, with no args
       const int argc = 1;
       Local<Value> argv[argc] = { String::New("connect") };
-      MakeCallback(conn->getHandle(), "emit", argc, argv);
+      MakeCallback(Context::GetCurrent()->Global(), "emit", argc, argv);
     } else {
       const int argc = 1;
       Local<Value> argv[argc] = { Local<Value>::New(Null()) };
@@ -551,11 +507,6 @@ void BTLEConnection::weak_cb(Persistent<Value> object, void* parameter) {
   object.Clear();
 }
 
-// Callback to allocate read buffer
-static uv_buf_t alloc_cb(uv_handle_t* handle, size_t suggested) {
-  return uv_buf_init(new char[suggested], suggested);
-}
-
 // Read callback
 void BTLEConnection::read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
   BTLEConnection* conn = (BTLEConnection *) stream->data;
@@ -569,18 +520,18 @@ void BTLEConnection::read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
     const int argc = 2;
     Local<Value> argv[argc] = { String::New("message"),
                                 Local<Value>::New(buffer->handle_) };
-    MakeCallback(conn->getHandle(), "emit", argc, argv);
+    MakeCallback(Context::GetCurrent()->Global(), "emit", argc, argv);
   }
 }
 
-void BTLEConnection::close_cb(uv_handle_t* handle) {
-  BTLEConnection* conn = (BTLEConnection *) handle->data;
+void BTLEConnection::close_cb(void* data) {
+  BTLEConnection* conn = (BTLEConnection *) data;
 
   if (conn->closeCallback.IsEmpty()) {
     // Emit a 'close' event, with no args
     const int argc = 1;
     Local<Value> argv[argc] = { String::New("close") };
-    MakeCallback(conn->getHandle(), "emit", argc, argv);
+    MakeCallback(Context::GetCurrent()->Global(), "emit", argc, argv);
   } else {
     const int argc = 1;
     Local<Value> argv[argc] = { Local<Value>::New(Null()) };

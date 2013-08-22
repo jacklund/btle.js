@@ -3,6 +3,8 @@
 
 #include <node.h>
 
+#include "gatt.h"
+
 class BTLEConnection: node::ObjectWrap {
 public:
   static void Init();
@@ -30,15 +32,16 @@ protected:
   void emit_error();
 
   // Callbacks
-  static void connect_cb(uv_poll_t* handle, int status, int events);
+  static void connect_cb(void* data, int status, int events);
+  static void close_cb(void* data);
   static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
   static void write_cb(uv_write_t* req, int status);
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);
-  static void close_cb(uv_handle_t* handle);
 
 private:
   static v8::Persistent<v8::Function> constructor;
 
+  Gatt* gatt;
   uv_poll_t* handle;
   uv_tcp_t* tcp;
   v8::Persistent<v8::Function> connectionCallback;

@@ -1,5 +1,5 @@
 all:
-		node-gyp --debug configure build
+		CXXFLAGS=-fpermissive node-gyp --debug configure build
 
 clean:
 		node-gyp clean
