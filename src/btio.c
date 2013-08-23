@@ -990,8 +990,6 @@ int bt_io_connect(struct set_opts* opts)
 {
 	int err;
 
-	printf("set_opts, type = %d, src_type = %d, dst_type = %d, sec_level = %d, channel = %d, psm = %d, cid = %d\n mtu = %d, imtu = %d, omtu = %d, mode = %d, flushable = %d\n", opts->type, opts->src_type, opts->dst_type, opts->sec_level, opts->channel, opts->psm, opts->cid, opts->mtu, opts->imtu, opts->omtu, opts->mode, opts->flushable);
-
 	int sock = create_handle(false, opts);
 	if (sock == -1)
 		return sock;
@@ -1010,7 +1008,6 @@ int bt_io_connect(struct set_opts* opts)
 		return -1;
 	}
 
-	printf("err = %d\n", err);
 	if (err < 0) {
 		close(sock);
 		return -1;

@@ -1,5 +1,8 @@
+#include <errno.h>
+
 #include "gatt.h"
 #include "btio.h"
+#include "gattException.h"
 
 class LockGuard {
 public:
@@ -13,7 +16,7 @@ public:
 
 private:
   pthread_mutex_t lock;
-}
+};
 
 static uint16_t enc_read_req(uint16_t handle, uint8_t *pdu, size_t len)
 {
@@ -32,14 +35,16 @@ static uint16_t enc_read_req(uint16_t handle, uint8_t *pdu, size_t len)
 }
 
 Gatt::Gatt()
-: sock(0), tcp(NULL), poll_handle(NULL), connectCb(NULL),
-  connectData(NULL), closeCb(NULL), closeData(NULL), errorCb(NULL),
-  errorData(NULL), readMapLock(PTHREAD_MUTEX_INITIALIZER) {
+: sock(0), tcp(NULL), poll_handle(NULL), imtu(0), cid(0),
+  connectCb(NULL), connectData(NULL), closeCb(NULL), closeData(NULL),
+  errorCb(NULL), errorData(NULL) {
+    pthread_mutex_init(&readMapLock, NULL);
 }
 
 Gatt::~Gatt() {
   delete this->tcp;
   delete this->poll_handle;
+  pthread_mutex_destroy(&readMapLock);
 }
 
 void
@@ -53,7 +58,8 @@ Gatt::connect(struct set_opts& opts, connectCallback connect, void* data) {
   this->sock = bt_io_connect(&opts);
   if (this->sock == -1)
   {
-    // TODO: Throw exception
+    // Throw exception
+    throw gattException("Error connecting", errno);
   }
 
   this->connectCb = connect;
@@ -76,24 +82,19 @@ Gatt::close(closeCallback cb, void* data) {
 }
 
 void
-Gatt::onWrite(uv_write_t* req, int status) {
-  // TODO: handle status < 0
-  delete req;
-}
-
-void
 Gatt::readAttribute(uint16_t handle, void* data, readCallback callback) {
   struct readData* rd = new struct readData();
   rd->data = data;
   rd->callback = callback;
   {
     LockGuard(this->readMapLock);
-    readMap.insert(std::pair<uint8_t, struct readData*>(data[0], rd);
+    readMap.insert(std::pair<uint8_t, struct readData*>(ATT_OP_READ_RESP, rd));
   }
-  write_req_t* req = new write_req_t;
-  req->buf = getBuffer();
-  size_t len = enc_read_req(handle, req->buf->base, req->buf->len);
-  uv_write(req, this->tcp, &req->buf, 1, onWrite);
+  uv_write_t req;
+  uv_buf_t buf = getBuffer();
+  size_t len = enc_read_req(handle, (uint8_t*) buf.base, buf.len);
+  buf.len = len;
+  uv_write(&req, (uv_stream_t*) this->tcp, &buf, 1, NULL);
 }
 
 void
@@ -117,23 +118,34 @@ Gatt::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
       gatt->close(NULL, NULL);
     }
   } else {
-    LockGuard(this->readMapLock);
+    uint8_t opcode = buf.base[0];
+    if (opcode == ATT_OP_ERROR) {
+      // TODO: Handle error
+      printf("Got error on handle %x: %x\n", *(uint16_t*) &buf.base[2], *(uint8_t*) &buf.base[4]);
+    } else {
+      struct readData* rd = NULL;
+      {
+        LockGuard(gatt->readMapLock);
 
-    ReadMap::iterator it = this->readMap.find(buf.base[0]);
-    if (it != ReadMap::end) {
-      struct readData* rd = it->second;
-      readMap.erase(it);
-      rd->callback(rd->data, buf->base, nread);
-      delete rd;
+        ReadMap::iterator it = gatt->readMap.find(opcode);
+        if (it != gatt->readMap.end()) {
+          rd = it->second;
+          gatt->readMap.erase(it);
+        }
+      }
+      if (rd) {
+        rd->callback(rd->data, (uint8_t*) buf.base, nread);
+        delete rd;
+      } else {
+      }
     }
   }
 
-  delete buf->base;
+  delete buf.base;
 }
 
 void
 Gatt::onConnect(uv_poll_t* handle, int status, int events) {
-  printf("onConnect called, status = %d, events = %d\n", status, events);
   // Stop polling
   uv_poll_stop(handle);
   uv_close((uv_handle_t*) handle, onClose);
@@ -144,8 +156,8 @@ Gatt::onConnect(uv_poll_t* handle, int status, int events) {
     int fd = handle->io_watcher.fd;
 
     // Get the CID and MTU information
-    bt_io_get(fd, BT_IO_OPT_IMTU, &this->imtu,
-        BT_IO_OPT_CID, &this->cid, BT_IO_OPT_INVALID);
+    bt_io_get(fd, BT_IO_OPT_IMTU, &gatt->imtu,
+        BT_IO_OPT_CID, &gatt->cid, BT_IO_OPT_INVALID);
 
     // Convert the socket to a TCP handle, and start reading
     gatt->tcp = new uv_tcp_t();
@@ -165,6 +177,5 @@ Gatt::getBuffer() {
 
 uv_buf_t
 Gatt::onAlloc(uv_handle_t* handle, size_t suggested) {
-  printf("alloc_cb called\n");
   return uv_buf_init(new char[suggested], suggested);
 }

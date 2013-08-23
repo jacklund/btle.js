@@ -37,6 +37,7 @@ protected:
   static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
   static void write_cb(uv_write_t* req, int status);
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);
+  static void onReadAttribute(void* data, uint8_t* buf, int len);
 
 private:
   static v8::Persistent<v8::Function> constructor;

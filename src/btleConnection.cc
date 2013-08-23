@@ -8,6 +8,7 @@
 
 #include "btleConnection.h"
 #include "btio.h"
+#include "gattException.h"
 
 using namespace v8;
 using namespace node;
@@ -357,8 +358,11 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args) {
   }
 
   conn->gatt = new Gatt();
-  //conn->gatt->onError(error_cb, (void*) conn);
-  conn->gatt->connect(opts, connect_cb, (void*) conn);
+  try {
+    conn->gatt->connect(opts, connect_cb, (void*) conn);
+  } catch (gattException& e) {
+    conn->emit_error();
+  }
 
   return scope.Close(Undefined());
 }
@@ -381,7 +385,28 @@ Handle<Value> BTLEConnection::ReadHandle(const Arguments& args) {
     return scope.Close(Undefined());
   }
 
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
+  callback.MakeWeak(*callback, weak_cb);
+  
+  int handle;
+  getIntValue(args[0]->ToNumber(), handle);
+  conn->gatt->readAttribute(handle, *callback, onReadAttribute);
   return scope.Close(Undefined());
+}
+
+static void onFree(char* data, void* hint) {
+  delete data;
+}
+
+void BTLEConnection::onReadAttribute(void* data, uint8_t* buf, int len) {
+  Persistent<Function> callback = static_cast<Function*>(data);
+  // Buffer minus the opcode
+  Buffer* buffer = Buffer::New((char*) &buf[1], len-1, onFree, NULL);
+  const int argc = 1;
+  Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
+  callback->Call(Context::GetCurrent()->Global(), argc, argv);
 }
 
 Handle<Value> BTLEConnection::Write(const Arguments& args) {
@@ -465,7 +490,6 @@ Persistent<Object> BTLEConnection::getHandle() {
 
 // Callback executed when we get connected
 void BTLEConnection::connect_cb(void* data, int status, int events) {
-  printf("BTLEConnection::connect_cb called, data = %x, status = %d, events = %d\n", data, status, events);
   BTLEConnection* conn = (BTLEConnection *) data;
   if (status == 0) {
     if (conn->connectionCallback.IsEmpty()) {
@@ -546,6 +570,7 @@ extern "C" void init(Handle<Object> exports) {
   NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
   NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
   NODE_SET_PROTOTYPE_METHOD(t, "write", BTLEConnection::Write);
+  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
 
   exports->Set(String::NewSymbol("BTLEConnection"), t->GetFunction());
 }
