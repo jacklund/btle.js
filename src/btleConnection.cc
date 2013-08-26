@@ -11,6 +11,21 @@ using namespace node;
 
 Persistent<Function> BTLEConnection::constructor;
 
+struct callbackData {
+  callbackData() : conn(NULL), data(NULL) {}
+  BTLEConnection* conn;
+  void* data;
+};
+
+BTLEConnection::BTLEConnection() : gatt(NULL)
+{
+}
+
+BTLEConnection::~BTLEConnection()
+{
+  delete gatt;
+}
+
 void BTLEConnection::Init()
 {
   // Prepare constructor template
@@ -100,9 +115,13 @@ Handle<Value> BTLEConnection::ReadHandle(const Arguments& args)
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
   callback.MakeWeak(*callback, weak_cb);
   
+  struct callbackData* cd = new struct callbackData();
+  cd->data = *callback;
+  cd->conn = conn;
+
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->gatt->readAttribute(handle, *callback, onReadAttribute);
+  conn->gatt->readAttribute(handle, cd, onReadAttribute);
   return scope.Close(Undefined());
 }
 
@@ -113,19 +132,27 @@ static void onFree(char* data, void* hint)
 
 void BTLEConnection::onReadAttribute(void* data, uint8_t* buf, int len)
 {
-  Persistent<Function> callback = static_cast<Function*>(data);
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  Persistent<Function> callback = static_cast<Function*>(cd->data);
   // Buffer minus the opcode
   Buffer* buffer = Buffer::New((char*) &buf[1], len-1, onFree, NULL);
   const int argc = 1;
   Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
-  callback->Call(Context::GetCurrent()->Global(), argc, argv);
+  callback->Call(cd->conn->self,  argc, argv);
+  delete cd;
 }
 
-struct callbackData {
-  callbackData() : conn(NULL), data(NULL) {}
-  BTLEConnection* conn;
-  void* data;
-};
+void BTLEConnection::onReadNotification(void* data, uint8_t* buf, int len)
+{
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  Persistent<Function> callback = static_cast<Function*>(cd->data);
+  // Buffer minus the opcode and handle
+  Buffer* buffer = Buffer::New((char*) &buf[3], len-3, onFree, NULL);
+  const int argc = 1;
+  Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
+  callback->Call(cd->conn->self,  argc, argv);
+  // NOTE: We don't delete cd here because we reuse it for the notifications
+}
 
 void BTLEConnection::onWrite(void* data, int status)
 {
@@ -173,7 +200,7 @@ Handle<Value> BTLEConnection::WriteCommand(const v8::Arguments& args)
   Persistent<Function> callback;
   if (args.Length() > 2) {
     if (!args[2]->IsFunction()) {
-      ThrowException(Exception::TypeError(String::New("Second argument must be a callback")));
+      ThrowException(Exception::TypeError(String::New("Third argument must be a callback")));
       return scope.Close(Undefined());
     }
 
@@ -223,6 +250,41 @@ Handle<Value> BTLEConnection::WriteRequest(const v8::Arguments& args)
   getIntValue(args[0]->ToNumber(), handle);
 
   conn->gatt->writeRequest(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]));
+
+  return scope.Close(Undefined());
+}
+
+Handle<Value> BTLEConnection::AddNotificationListener(const Arguments& args)
+{
+  HandleScope scope;
+
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  if (args.Length() < 2) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("First argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[1]->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New("Second argument must be a callback")));
+    return scope.Close(Undefined());
+  }
+
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
+  callback.MakeWeak(*callback, weak_cb);
+
+  struct callbackData* cd = new struct callbackData();
+  cd->data = *callback;
+  cd->conn = conn;
+
+  int handle;
+  getIntValue(args[0]->ToNumber(), handle);
+  conn->gatt->listenForNotifications(handle, cd, onReadNotification);
 
   return scope.Close(Undefined());
 }
@@ -329,6 +391,7 @@ extern "C" void init(Handle<Object> exports)
   NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
   NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
   NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
+  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
   NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
 
   exports->Set(String::NewSymbol("BTLEConnection"), t->GetFunction());

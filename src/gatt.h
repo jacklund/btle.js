@@ -21,6 +21,7 @@ public:
   void readAttribute(uint16_t handle, void* data, readCallback callback);
   void writeCommand(uint16_t handle, const uint8_t* data, size_t length, writeCallback callback=NULL, void* cbData=NULL);
   void writeRequest(uint16_t handle, const uint8_t* data, size_t length, writeCallback callback=NULL, void* cbData=NULL);
+  void listenForNotifications(uint16_t handle, void* data, readCallback callback);
   void close(closeCallback cb, void* data);
 
 private:
@@ -32,6 +33,7 @@ private:
   uv_buf_t getBuffer();
   size_t encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
     const uint8_t* value = NULL, size_t vlen = 0);
+  bool isSingleResponse(uint8_t opcode);
 
   struct readData;
   struct writeData;

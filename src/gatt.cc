@@ -29,9 +29,10 @@ struct Gatt::writeData
 };
 
 struct Gatt::readData {
-  readData() : data(NULL), callback(NULL) {}
+  readData() : data(NULL), handle(0), callback(NULL) {}
 
   void* data;
+  uint16_t handle;
   readCallback callback;
 };
 
@@ -133,6 +134,19 @@ Gatt::readAttribute(uint16_t handle, void* data, readCallback callback)
 }
 
 void
+Gatt::listenForNotifications(uint16_t handle, void* data, readCallback callback)
+{
+  struct readData* rd = new struct readData();
+  rd->data = data;
+  rd->handle = handle;
+  rd->callback = callback;
+  {
+    LockGuard(this->readMapLock);
+    readMap.insert(std::pair<uint8_t, struct readData*>(ATT_OP_HANDLE_NOTIFY, rd));
+  }
+}
+
+void
 Gatt::writeCommand(uint16_t handle, const uint8_t* data, size_t length, writeCallback callback, void* cbData)
 {
   uv_write_t* req = new uv_write_t;
@@ -184,6 +198,21 @@ Gatt::onClose(uv_handle_t* handle)
     gatt->closeCb(gatt->closeData);
 }
 
+bool
+Gatt::isSingleResponse(uint8_t opcode)
+{
+  switch (opcode)
+  {
+    case ATT_OP_HANDLE_NOTIFY:
+    case ATT_OP_HANDLE_IND:
+    case ATT_OP_HANDLE_CNF:
+      return false;
+
+    default:
+      return true;
+  }
+}
+
 void
 Gatt::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
@@ -211,12 +240,22 @@ Gatt::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
         ReadMap::iterator it = gatt->readMap.find(opcode);
         if (it != gatt->readMap.end()) {
           rd = it->second;
-          gatt->readMap.erase(it);
+          if (gatt->isSingleResponse(opcode)) gatt->readMap.erase(it);
         }
       }
       if (rd) {
-        if (rd->callback) rd->callback(rd->data, (uint8_t*) buf.base, nread);
-        delete rd;
+        if (rd->callback) {
+          if (rd->handle != 0) {
+            uint16_t handle = *(uint16_t*)(&buf.base[1]);
+            if (handle == rd->handle) {
+              rd->callback(rd->data, (uint8_t*) buf.base, nread);
+            } else {
+            }
+          } else {
+            rd->callback(rd->data, (uint8_t*) buf.base, nread);
+          }
+        }
+        if (gatt->isSingleResponse(opcode)) delete rd;
       } else {
         // TODO: Figure out how to handle if we can't find it
       }

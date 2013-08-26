@@ -22,6 +22,9 @@ connect_opts = {
 
 conn.connect(connect_opts, function(err) {
   console.log("Got connection, err = " + err);
+  conn.addNotificationListener(0x25, function(buffer) {
+    console.log(buffer);
+  });
   conn.readHandle(0x25, function(buffer) {
     console.log(buffer);
     buffer = new Buffer([1]);
@@ -30,7 +33,9 @@ conn.connect(connect_opts, function(err) {
       setTimeout(function() {
         conn.readHandle(0x25, function(buffer) {
           console.log(buffer);
-        })
+          buffer = new Buffer([1, 0]);
+          conn.writeCommand(0x26, buffer);
+        });
       }, 1000);
     });
   });
