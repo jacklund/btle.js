@@ -23,7 +23,15 @@ connect_opts = {
 conn.connect(connect_opts, function(err) {
   console.log("Got connection, err = " + err);
   conn.readHandle(0x25, function(buffer) {
-    console.log("Got buffer of length " + buffer.length);
     console.log(buffer);
+    buffer = new Buffer([1]);
+    console.log(buffer);
+    conn.writeCommand(0x29, buffer, function(err) {
+      setTimeout(function() {
+        conn.readHandle(0x25, function(buffer) {
+          console.log(buffer);
+        })
+      }, 1000);
+    });
   });
 });
