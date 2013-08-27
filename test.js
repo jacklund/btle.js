@@ -29,14 +29,13 @@ conn.connect(connect_opts, function(err) {
     console.log(buffer);
     buffer = new Buffer([1]);
     console.log(buffer);
-    conn.writeCommand(0x29, buffer, function(err) {
-      setTimeout(function() {
-        conn.readHandle(0x25, function(buffer) {
-          console.log(buffer);
-          buffer = new Buffer([1, 0]);
-          conn.writeCommand(0x26, buffer);
-        });
-      }, 1000);
-    });
+    conn.writeCommand(0x29, buffer);
+    setTimeout(function() {
+      conn.readHandle(0x25, function(buffer) {
+	console.log(buffer);
+	buffer = new Buffer([1, 0]);
+	conn.writeCommand(0x26, buffer);
+      });
+    }, 1000);
   });
 });
