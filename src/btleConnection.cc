@@ -121,7 +121,7 @@ Handle<Value> BTLEConnection::ReadHandle(const Arguments& args)
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->gatt->readAttribute(handle, cd, onReadAttribute);
+  conn->gatt->readAttribute(handle, onReadAttribute, cd);
   return scope.Close(Undefined());
 }
 
@@ -284,7 +284,7 @@ Handle<Value> BTLEConnection::AddNotificationListener(const Arguments& args)
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->gatt->listenForNotifications(handle, cd, onReadNotification);
+  conn->gatt->listenForNotifications(handle, onReadNotification, cd);
 
   return scope.Close(Undefined());
 }

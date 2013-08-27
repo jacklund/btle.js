@@ -16,7 +16,6 @@ public:
   Gatt();
   virtual ~Gatt();
 
-  void onError(errorCallback cb, void* data);
   void connect(struct set_opts& opts, connectCallback connect, void* data);
   void readAttribute(uint16_t handle, void* data, readCallback callback);
   void writeCommand(uint16_t handle, const uint8_t* data, size_t length, writeCallback callback=NULL, void* cbData=NULL);
