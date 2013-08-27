@@ -22,6 +22,12 @@
  *
  */
 
+/*
+ * This code was originally part of the BlueZ protocol stack (hence the comments above)
+ * but has been heavily modified to remove dependencies on glib, and make it a true low-level
+ * protocol stack.
+ */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif

@@ -21,6 +21,12 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
+
+/*
+ * This code was originally part of the BlueZ protocol stack (hence the comments above)
+ * but has been heavily modified to remove dependencies on glib, and make it a true low-level
+ * protocol stack.
+ */
 #ifndef BT_IO_H
 #define BT_IO_H
 
