@@ -974,11 +974,12 @@ static int create_handle(bool server, struct set_opts *opts)
 		return sock;
 	}
 
-	if (fcntl(sock, F_GETFL)) {
+	r = fcntl(sock, F_GETFL);
+	if (r < 0) {
 		goto failed;
 	}
 
-	if (fcntl(sock, F_SETFL, r | O_NONBLOCK)) {
+	if (fcntl(sock, F_SETFL, r | O_NONBLOCK) < 0) {
 		goto failed;
 	}
 

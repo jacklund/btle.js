@@ -28,7 +28,7 @@ public:
   void connect(struct set_opts& opts, connectCallback connect, void* data);
 
   // Read a bluetooth attribute
-  void readAttribute(uint16_t handle, void* data, readCallback callback);
+  void readAttribute(uint16_t handle, readCallback callback, void* data);
 
   // Write data to an attribute without expecting a response
   void writeCommand(uint16_t handle, const uint8_t* data, size_t length, writeCallback callback=NULL, void* cbData=NULL);
@@ -37,7 +37,7 @@ public:
   void writeRequest(uint16_t handle, const uint8_t* data, size_t length, writeCallback callback=NULL, void* cbData=NULL);
 
   // Listen for incoming notifications from the device
-  void listenForNotifications(uint16_t handle, void* data, readCallback callback);
+  void listenForNotifications(uint16_t handle, readCallback callback, void* data);
 
   // Close the connection
   void close(closeCallback cb, void* data);

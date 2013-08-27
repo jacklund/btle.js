@@ -337,7 +337,7 @@ Gatt::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
             if (handle == rd->handle) {
               rd->callback(rd->data, (uint8_t*) buf.base, nread);
             } else {
-              // Not the right handle? We just drop it. :-\
+              // Not the right handle? We just drop it.
             }
           } else {
             // No handle? Just call the callback then
