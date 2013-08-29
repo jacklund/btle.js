@@ -46,6 +46,7 @@ private:
 
   v8::Handle<v8::Object> self;
   Gatt* gatt;
+  Connection* connection;
   v8::Persistent<v8::Function> connectionCallback;
   v8::Persistent<v8::Function> closeCallback;
 };

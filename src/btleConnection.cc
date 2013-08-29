@@ -2,8 +2,9 @@
 #include <node_buffer.h>
 
 #include "btleConnection.h"
+#include "connection.h"
 #include "btio.h"
-#include "gattException.h"
+#include "btleException.h"
 #include "util.h"
 
 using namespace v8;
@@ -20,7 +21,7 @@ struct callbackData {
 };
 
 // Constructor
-BTLEConnection::BTLEConnection() : gatt(NULL)
+BTLEConnection::BTLEConnection() : gatt(NULL), connection(NULL)
 {
 }
 
@@ -28,6 +29,7 @@ BTLEConnection::BTLEConnection() : gatt(NULL)
 BTLEConnection::~BTLEConnection()
 {
   delete gatt;
+  delete connection;
 }
 
 // Node.js initialization
@@ -35,7 +37,7 @@ void BTLEConnection::Init()
 {
   // Prepare constructor template
   Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-  tpl->SetClassName(String::NewSymbol("BTLEConnection"));
+  tpl->SetClassName(String::NewSymbol("Connection"));
   tpl->InstanceTemplate()->SetInternalFieldCount(4);
 
   constructor = Persistent<Function>::New(tpl->GetFunction());
@@ -88,10 +90,11 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  conn->gatt = new Gatt();
+  conn->connection = new Connection();
+  conn->gatt = new Gatt(conn->connection);
   try {
-    conn->gatt->connect(opts, onConnect, (void*) conn);
-  } catch (gattException& e) {
+    conn->connection->connect(opts, onConnect, (void*) conn);
+  } catch (BTLEException& e) {
     conn->emit_error();
   }
 
@@ -266,7 +269,7 @@ Handle<Value> BTLEConnection::Close(const Arguments& args)
   }
 
   if (conn->gatt) {
-    conn->gatt->close(onClose, (void*) conn);
+    conn->connection->close(onClose, (void*) conn);
   }
 
   return scope.Close(Undefined());
@@ -415,7 +418,7 @@ extern "C" void init(Handle<Object> exports)
   NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
   NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
 
-  exports->Set(String::NewSymbol("BTLEConnection"), t->GetFunction());
+  exports->Set(String::NewSymbol("Connection"), t->GetFunction());
 }
 
 NODE_MODULE(btleConnection, init)
