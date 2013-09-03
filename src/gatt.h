@@ -47,9 +47,17 @@ private:
   // Internal data
   Connection* connection;  // Bluetooth connection
 
-  typedef std::map<uint8_t, readData*> ReadMap;
-  ReadMap readMap;             // Map of opcode => callback data
+  // Map of opcode => callback
+  typedef uint8_t opcode_t;
+  typedef std::map<opcode_t, readData*> ReadMap;
+  ReadMap readMap;
   pthread_mutex_t readMapLock; // Associated lock
+
+  // Map of handle => callback
+  typedef uint16_t handle_t;
+  typedef std::map<handle_t, readData*> NotificationMap;
+  NotificationMap notificationMap;
+  pthread_mutex_t notificationMapLock; // Associated lock
 };
 
 #endif

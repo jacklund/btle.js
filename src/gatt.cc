@@ -22,10 +22,9 @@ private:
 
 // Struct for read callbacks
 struct Gatt::readData {
-  readData() : data(NULL), handle(0), callback(NULL) {}
+  readData() : data(NULL), callback(NULL) {}
 
   void* data;
-  uint16_t handle;
   Connection::readCallback callback;
 };
 
@@ -128,11 +127,10 @@ Gatt::listenForNotifications(uint16_t handle, Connection::readCallback callback,
   // Set up the read callback
   struct readData* rd = new struct readData();
   rd->data = data;
-  rd->handle = handle;
   rd->callback = callback;
   {
-    LockGuard(this->readMapLock);
-    readMap.insert(std::pair<uint8_t, struct readData*>(ATT_OP_HANDLE_NOTIFY, rd));
+    LockGuard(this->notificationMapLock);
+    notificationMap.insert(std::pair<handle_t, struct readData*>(handle, rd));
   }
 }
 
@@ -187,51 +185,52 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
   Gatt* gatt = (Gatt*) data;
 
   uint8_t opcode = buf[0];
+  struct readData* rd = NULL;
+  handle_t handle;
 
-  // Error opcode means there was an error on the device side
-  if (opcode == ATT_OP_ERROR) {
-    // TODO: Handle error
-    printf("Got error on handle %x: %x\n", *(uint16_t*) &buf[2], *(uint8_t*) &buf[4]);
-  } else {
+  switch (opcode) {
+    case ATT_OP_ERROR:
+      // TODO: Handle error
+      fprintf(stderr, "Got error on handle %x: %x\n", *(uint16_t*) &buf[2], *(uint8_t*) &buf[4]);
+      break;
 
-    // Not an error - we look up the opcode in our read map
-    // to see what to do with the data
-    struct readData* rd = NULL;
-    {
-      LockGuard(gatt->readMapLock);
-
-      ReadMap::iterator it = gatt->readMap.find(opcode);
-      if (it != gatt->readMap.end()) {
-        rd = it->second;
-        // If this opcode only has a single response, remove
-        // the entry from the map
-        if (gatt->isSingleResponse(opcode)) gatt->readMap.erase(it);
-      }
-    }
-
-    // If it's found, call the callback
-    if (rd) {
-      if (rd->callback) {
-        // TODO: This should probably be a map of handle => callback
-        // so we can handle multiple streams of reads
-        if (rd->handle != 0) {
-          uint16_t handle = *(uint16_t*)(&buf[1]);
-          if (handle == rd->handle) {
-            rd->callback(rd->data, (uint8_t*) buf, nread);
-          } else {
-            // Not the right handle? We just drop it.
-          }
-        } else {
-          // No handle? Just call the callback then
-          rd->callback(rd->data, (uint8_t*) buf, nread);
+    case ATT_OP_HANDLE_NOTIFY:
+      handle = *(handle_t*)(&buf[1]);
+      {
+        LockGuard(gatt->notificationMapLock);
+        NotificationMap::iterator it = gatt->notificationMap.find(handle);
+        if (it != gatt->notificationMap.end()) {
+          rd = it->second;
         }
       }
-      // If this opcode only has a single response, delete the
-      // callback data
-      if (gatt->isSingleResponse(opcode)) delete rd;
-    } else {
-      // TODO: Figure out how to handle if we can't find it
-    }
+      if (rd != NULL) {
+        if (rd->callback != NULL) {
+          rd->callback(rd->data, (uint8_t*) (&buf[3]), nread - 3);
+        }
+      } else {
+        fprintf(stderr, "Got notification for unknown handle %x\n", handle);
+      }
+      break;
+
+    default:
+      {
+        LockGuard(gatt->readMapLock);
+
+        ReadMap::iterator it = gatt->readMap.find(opcode);
+        if (it != gatt->readMap.end()) {
+          rd = it->second;
+          // If this opcode only has a single response, remove
+          // the entry from the map
+          if (gatt->isSingleResponse(opcode)) gatt->readMap.erase(it);
+        }
+      }
+      if (rd != NULL) {
+        if (rd->callback != NULL) {
+          rd->callback(rd->data, (uint8_t*) (&buf[1]), nread - 1);
+        }
+      } else {
+        fprintf(stderr, "Got unexpected data with opcode %x\n", opcode);
+      }
   }
 }
 
