@@ -7,8 +7,9 @@
 // Struct for write callbacks
 struct writeData
 {
-  writeData() : data(NULL), callback(NULL) {}
+  writeData() : connection(NULL), data(NULL), callback(NULL) {}
 
+  Connection* connection;
   void* data;
   Connection::writeCallback callback;
 };
@@ -86,6 +87,7 @@ Connection::write(uv_buf_t& buffer, writeCallback callback, void* cbData)
   uv_write_t* req = new uv_write_t();
   if (callback != NULL) {
     struct writeData* wd = new struct writeData();
+    wd->connection = this;
     wd->data = cbData;
     wd->callback = callback;
     req->data = wd;
@@ -133,7 +135,21 @@ void
 Connection::onWrite(uv_write_t* req, int status)
 {
   struct writeData* wd = (struct writeData*) req->data;
-  if (wd->callback) wd->callback(wd->data, status);
+  if (status < 0) {
+    Connection* conn = wd->connection;
+    if (conn->errorCb) {
+      // We call the callback and let it decide whether to close the
+      // connection
+      uv_err_t err = uv_last_error(uv_default_loop());
+      conn->errorCb(conn->errorData, uv_strerror(err));
+    } else {
+      // If no error callback, close the connection on error
+      conn->close(NULL, NULL);
+      // TODO: Throw an exception?
+    }
+  } else {
+    if (wd->callback) wd->callback(wd->data, status);
+  }
 }
 
 //
@@ -161,7 +177,7 @@ Connection::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
       // We call the callback and let it decide whether to close the
       // connection
       uv_err_t err = uv_last_error(uv_default_loop());
-      conn->errorCb(conn->errorData, err);
+      conn->errorCb(conn->errorData, uv_strerror(err));
     } else {
       // If no error callback, close the connection on error
       conn->close(NULL, NULL);

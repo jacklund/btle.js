@@ -91,6 +91,7 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args)
   }
 
   conn->connection = new Connection();
+  conn->connection->registerErrorCallback(onError, conn);
   conn->gatt = new Gatt(conn->connection);
   conn->gatt->onError(onError, conn);
   try {

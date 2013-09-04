@@ -12,7 +12,7 @@ public:
   // Callback types
   typedef void (*connectCallback)(void* data, int status, int events);
   typedef void (*closeCallback)(void* data);
-  typedef void (*errorCallback)(void* data, uv_err_t err);
+  typedef void (*errorCallback)(void* data, const char* error);
   typedef void (*readCallback)(void* data, uint8_t* buf, int len);
   typedef void (*writeCallback)(void* data, int status);
 
