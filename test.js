@@ -1,4 +1,4 @@
-var btle = require('./src/btleConnection');
+var btle = require('./index');
 
 conn = new btle.Connection();
 

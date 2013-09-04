@@ -435,4 +435,4 @@ extern "C" void init(Handle<Object> exports)
   exports->Set(String::NewSymbol("Connection"), t->GetFunction());
 }
 
-NODE_MODULE(btleConnection, init)
+NODE_MODULE(btle, init)

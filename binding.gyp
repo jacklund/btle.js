@@ -1,7 +1,7 @@
 {
   "targets": [
   {
-    "target_name": "btleConnection",
+    "target_name": "btle",
       "sources": [
         "src/btio.c",
         "src/gatt.cc",
