@@ -30,6 +30,8 @@ public:
 protected:
   // Emits an error based on the last error
   void emit_error();
+  // Emits an error with the given error message
+  void emit_error(const char* errorMessage);
 
   // Callbacks sent into gatt.cc
   static void onConnect(void* data, int status, int events);
@@ -37,6 +39,7 @@ protected:
   static void onReadAttribute(void* data, uint8_t* buf, int len);
   static void onReadNotification(void* data, uint8_t* buf, int len);
   static void onWrite(void* data, int status);
+  static void onError(void* data, const char* error);
 
   // Callback called when we tell v8 to make a reference weak
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);

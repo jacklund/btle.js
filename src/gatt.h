@@ -15,6 +15,8 @@
  */
 class Gatt {
 public:
+  typedef void (*errorCallback)(void* data, const char* error);
+
   // Constructor/Destructor
   Gatt(Connection* connection);
   virtual ~Gatt();
@@ -31,6 +33,12 @@ public:
   // Listen for incoming notifications from the device
   void listenForNotifications(uint16_t handle, Connection::readCallback callback, void* data);
 
+  // Handle errors
+  void onError(errorCallback handler, void* data) {
+    errorHandler = handler;
+    errorData = data;
+  }
+
 private:
   struct readData;
 
@@ -46,6 +54,10 @@ private:
 
   // Internal data
   Connection* connection;  // Bluetooth connection
+
+  // Error handler
+  errorCallback errorHandler;
+  void* errorData;
 
   // Map of opcode => callback
   typedef uint8_t opcode_t;

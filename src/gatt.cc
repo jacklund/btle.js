@@ -74,7 +74,7 @@ Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
 
 // Constructor
 Gatt::Gatt(Connection* conn)
-  : connection(conn)
+  : connection(conn), errorHandler(NULL), errorData(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&readMapLock, NULL);
@@ -190,8 +190,12 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
 
   switch (opcode) {
     case ATT_OP_ERROR:
-      // TODO: Handle error
-      fprintf(stderr, "Got error on handle %x: %x\n", *(uint16_t*) &buf[2], *(uint8_t*) &buf[4]);
+      if (gatt->errorHandler != NULL) {
+        char buffer[1024];
+        sprintf(buffer, "Device returned error %x on request opcode %x, handle %x",
+          *(uint8_t*) &buf[4], *(uint8_t*) &buf[1], *(uint16_t*) &buf[2]);
+        gatt->errorHandler(gatt->errorData, buffer);
+      }
       break;
 
     case ATT_OP_HANDLE_NOTIFY:
@@ -209,7 +213,11 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
           rd->callback(rd->data, (uint8_t*) (&buf[3]), nread - 3);
         }
       } else {
-        fprintf(stderr, "Got notification for unknown handle %x\n", handle);
+        if (gatt->errorHandler != NULL) {
+          char buffer[1024];
+          sprintf(buffer, "Got unexpected notification for handle %x", handle);
+          gatt->errorHandler(gatt->errorData, buffer);
+        }
       }
       break;
 
@@ -231,7 +239,11 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
           rd->callback(rd->data, (uint8_t*) (&buf[1]), nread - 1);
         }
       } else {
-        fprintf(stderr, "Got unexpected data with opcode %x\n", opcode);
+        if (gatt->errorHandler != NULL) {
+          char buffer[1024];
+          sprintf(buffer, "Got unexpected data with opcode %x\n", opcode);
+          gatt->errorHandler(gatt->errorData, buffer);
+        }
       }
   }
 }

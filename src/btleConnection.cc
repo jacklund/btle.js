@@ -92,6 +92,7 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args)
 
   conn->connection = new Connection();
   conn->gatt = new Gatt(conn->connection);
+  conn->gatt->onError(onError, conn);
   try {
     conn->connection->connect(opts, onConnect, (void*) conn);
   } catch (BTLEException& e) {
@@ -286,6 +287,15 @@ void BTLEConnection::emit_error()
     MakeCallback(this->self, "emit", argc, argv);
 }
 
+void BTLEConnection::emit_error(const char* errorMessage)
+{
+    const int argc = 2;
+    Local<Value> error = String::New(errorMessage);
+    Local<Value> argv[argc] = { String::New("error"),
+                                error };
+    MakeCallback(this->self, "emit", argc, argv);
+}
+
 // Callback executed when we get connected
 void BTLEConnection::onConnect(void* data, int status, int events)
 {
@@ -402,6 +412,12 @@ void BTLEConnection::onClose(void* data)
     Local<Value> argv[argc] = { Local<Value>::New(Null()) };
     conn->closeCallback->Call(Context::GetCurrent()->Global(), argc, argv);
   }
+}
+
+void BTLEConnection::onError(void* data, const char* error) {
+  BTLEConnection* conn = (BTLEConnection*) data;
+
+  conn->emit_error(error);
 }
 
 // Node.js initialization
