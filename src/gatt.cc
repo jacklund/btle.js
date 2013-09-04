@@ -205,6 +205,7 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
       }
       if (rd != NULL) {
         if (rd->callback != NULL) {
+          // Note: Remove the opcode and handle before calling the callback
           rd->callback(rd->data, (uint8_t*) (&buf[3]), nread - 3);
         }
       } else {
@@ -226,6 +227,7 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
       }
       if (rd != NULL) {
         if (rd->callback != NULL) {
+          // Note: Remove the opcode beofre calling the callback
           rd->callback(rd->data, (uint8_t*) (&buf[1]), nread - 1);
         }
       } else {

@@ -329,8 +329,7 @@ void BTLEConnection::onReadAttribute(void* data, uint8_t* buf, int len)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Persistent<Function> callback = static_cast<Function*>(cd->data);
-  // Buffer minus the opcode
-  Buffer* buffer = Buffer::New((char*) &buf[1], len-1, onFree, NULL);
+  Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
   const int argc = 1;
   Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
   callback->Call(cd->conn->self,  argc, argv);
@@ -342,8 +341,7 @@ void BTLEConnection::onReadNotification(void* data, uint8_t* buf, int len)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Persistent<Function> callback = static_cast<Function*>(cd->data);
-  // Buffer minus the opcode and handle
-  Buffer* buffer = Buffer::New((char*) &buf[3], len-3, onFree, NULL);
+  Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
   const int argc = 1;
   Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
   callback->Call(cd->conn->self,  argc, argv);
