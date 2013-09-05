@@ -118,9 +118,8 @@ Connection::close(closeCallback cb, void* data)
     struct closeData* cd = new struct closeData();
     cd->callback = cb;
     cd->data = data;
+    this->tcp->data = cd;
     uv_close((uv_handle_t*) this->tcp, onClose);
-    delete this->tcp;
-    this->tcp = NULL;
   }
 }
 
