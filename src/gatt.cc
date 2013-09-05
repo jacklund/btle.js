@@ -78,12 +78,14 @@ Gatt::Gatt(Connection* conn)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&readMapLock, NULL);
+  pthread_mutex_init(&notificationMapLock, NULL);
 }
 
 // Destructor
 Gatt::~Gatt()
 {
   pthread_mutex_destroy(&readMapLock);
+  pthread_mutex_destroy(&notificationMapLock);
 }
 
 //
@@ -185,13 +187,11 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
   Gatt* gatt = (Gatt*) data;
 
   uint8_t opcode = buf[0];
-  printf("Got opcode %x\n", opcode);
   struct readData* rd = NULL;
   handle_t handle;
 
   switch (opcode) {
     case ATT_OP_ERROR:
-      printf("Got error opcode\n");
       if (gatt->errorHandler != NULL) {
         uint8_t errorCode = *(uint8_t*) &buf[4];
         const char* message = gatt->getErrorString(errorCode);
