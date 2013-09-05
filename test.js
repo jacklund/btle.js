@@ -25,7 +25,10 @@ connect_opts = {
 
 // Connect
 conn.connect(connect_opts, function(err) {
-  console.log("Got connection, err = " + err);
+  process.on('SIGINT', function() {
+    conn.close();
+  });
+
   // Listen for notifications
   conn.addNotificationListener(0x25, function(buffer) {
     console.log("Temperature, " + buffer.readUInt16LE(0) + ", " + buffer.readUInt16LE(2));
