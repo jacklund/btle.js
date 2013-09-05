@@ -52,6 +52,12 @@ private:
   // Tells if this command has a single response, or an indefinite number
   bool isSingleResponse(uint8_t opcode);
 
+  // Convert a device error code to a human-readable message
+  const char* getErrorString(uint8_t errorCode);
+
+  // Convert an opcode to the name of the operation
+  const char* getOpcodeName(uint8_t opcode);
+
   // Internal data
   Connection* connection;  // Bluetooth connection
 

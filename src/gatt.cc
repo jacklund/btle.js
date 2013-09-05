@@ -185,15 +185,24 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
   Gatt* gatt = (Gatt*) data;
 
   uint8_t opcode = buf[0];
+  printf("Got opcode %x\n", opcode);
   struct readData* rd = NULL;
   handle_t handle;
 
   switch (opcode) {
     case ATT_OP_ERROR:
+      printf("Got error opcode\n");
       if (gatt->errorHandler != NULL) {
+        uint8_t errorCode = *(uint8_t*) &buf[4];
+        const char* message = gatt->getErrorString(errorCode);
         char buffer[1024];
-        sprintf(buffer, "Device returned error %x on request opcode %x, handle %x",
-          *(uint8_t*) &buf[4], *(uint8_t*) &buf[1], *(uint16_t*) &buf[2]);
+        if (message != NULL) {
+          sprintf(buffer, "Error on %s for handle 0x%02X: %s",
+            gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
+        } else {
+          sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
+            gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
+        }
         gatt->errorHandler(gatt->errorData, buffer);
       }
       break;
@@ -267,5 +276,141 @@ Gatt::isSingleResponse(uint8_t opcode)
 
     default:
       return true;
+  }
+}
+
+const char*
+Gatt::getErrorString(uint8_t errorCode)
+{
+  switch (errorCode) {
+    case ATT_ECODE_INVALID_HANDLE:
+      return "Invalid handle";
+    case ATT_ECODE_READ_NOT_PERM:
+      return "Attribute cannot be read";
+    case ATT_ECODE_WRITE_NOT_PERM:
+      return "Attribute cannot be written";
+    case ATT_ECODE_INVALID_PDU:
+      return "Attribute PDU is invalid";
+    case ATT_ECODE_AUTHENTICATION:
+      return "Authentication required";
+    case ATT_ECODE_REQ_NOT_SUPP:
+      return "Client request not supported";
+    case ATT_ECODE_INVALID_OFFSET:
+      return "Offset specified was past end of attribute";
+    case ATT_ECODE_AUTHORIZATION:
+      return "Authorization required";
+    case ATT_ECODE_PREP_QUEUE_FULL:
+      return "Too many prepare writes have been queued";
+    case ATT_ECODE_ATTR_NOT_FOUND:
+      return "No attribute found corresponding to the given handle";
+    case ATT_ECODE_ATTR_NOT_LONG:
+      return "Attribute cannot be read using the Read Blob request";
+    case ATT_ECODE_INSUFF_ENCR_KEY_SIZE:
+      return "Encryption key size is insufficient";
+    case ATT_ECODE_INVAL_ATTR_VALUE_LEN:
+      return "Attribute value length was invalid for this operation";
+    case ATT_ECODE_UNLIKELY:
+      return "Attribute request encountered unlikely error";
+    case ATT_ECODE_INSUFF_ENC:
+      return "Attribute requires encryption before it can be read or written";
+    case ATT_ECODE_UNSUPP_GRP_TYPE:
+      return "Attribute type is not a supported grouping attribute";
+    case ATT_ECODE_INSUFF_RESOURCES:
+      return "Insufficient Resources to complete the request";
+    default:
+      return NULL;
+  }
+}
+
+const char*
+Gatt::getOpcodeName(uint8_t opcode)
+{
+  switch (opcode) {
+    case ATT_OP_ERROR:
+      return "error response";
+
+    case ATT_OP_MTU_REQ:
+      return "exchange MTU request";
+
+    case ATT_OP_MTU_RESP:
+      return "exchange MTU response";
+
+    case ATT_OP_FIND_INFO_REQ:
+      return "find info request";
+
+    case ATT_OP_FIND_INFO_RESP:
+      return "find info response";
+
+    case ATT_OP_FIND_BY_TYPE_REQ:
+      return "find by type request";
+
+    case ATT_OP_FIND_BY_TYPE_RESP:
+      return "find by type response";
+
+    case ATT_OP_READ_BY_TYPE_REQ:
+      return "read by type request";
+
+    case ATT_OP_READ_BY_TYPE_RESP:
+      return "read by type response";
+
+    case ATT_OP_READ_REQ:
+      return "read request";
+
+    case ATT_OP_READ_RESP:
+      return "read response";
+
+    case ATT_OP_READ_BLOB_REQ:
+      return "read blob request";
+
+    case ATT_OP_READ_BLOB_RESP:
+      return "read blob response";
+
+    case ATT_OP_READ_MULTI_REQ:
+      return "read multiple request";
+
+    case ATT_OP_READ_MULTI_RESP:
+      return "read multiple response";
+
+    case ATT_OP_READ_BY_GROUP_REQ:
+      return "read by group type request";
+
+    case ATT_OP_READ_BY_GROUP_RESP:
+      return "read by group type response";
+
+    case ATT_OP_WRITE_REQ:
+      return "write request";
+
+    case ATT_OP_WRITE_RESP:
+      return "write response";
+
+    case ATT_OP_WRITE_CMD:
+      return "write command";
+
+    case ATT_OP_PREP_WRITE_REQ:
+      return "prepare write request";
+
+    case ATT_OP_PREP_WRITE_RESP:
+      return "prepare write response";
+
+    case ATT_OP_EXEC_WRITE_REQ:
+      return "execute write request";
+
+    case ATT_OP_EXEC_WRITE_RESP:
+      return "execute write response";
+
+    case ATT_OP_HANDLE_NOTIFY:
+      return "handle value notification";
+
+    case ATT_OP_HANDLE_IND:
+      return "handle value indication";
+
+    case ATT_OP_HANDLE_CNF:
+      return "handle value confirmation";
+
+    case ATT_OP_SIGNED_WRITE_CMD:
+      return "signed write command";
+
+    default:
+        return NULL;
   }
 }
