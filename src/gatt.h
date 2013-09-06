@@ -17,7 +17,13 @@
 class Gatt {
 public:
   typedef void (*errorCallback)(void* data, const char* error);
-  typedef bool (*readCallback)(uint8_t status, void* data, uint8_t* buf, int len);
+  typedef bool (*readCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+
+  // Convert a device error code to a human-readable message
+  static const char* getErrorString(uint8_t errorCode);
+
+  // Convert an opcode to the name of the operation
+  static const char* getOpcodeName(uint8_t opcode);
 
   // Constructor/Destructor
   Gatt(Connection* connection);
@@ -51,14 +57,15 @@ private:
   typedef uint8_t opcode_t;
   typedef uint16_t handle_t;
 
-  static void onRead(void* data, uint8_t* buf, int len);
+  static void onRead(void* data, uint8_t* buf, int len, const char* error);
+  void handleRead(void* data, uint8_t* buf, int read, const char* error);
 
   // Utilities
   // Set the current request atomically
   bool setCurrentRequest(opcode_t request, opcode_t response, void* data, readCallback callback);
 
   // Make the callback for the current request
-  void callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len);
+  void callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error);
 
   // Remove the current request atomically
   void removeCurrentRequest();
@@ -68,12 +75,6 @@ private:
     const uint8_t* value = NULL, size_t vlen = 0);
   size_t encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
     uint8_t* buffer, size_t buflen);
-
-  // Convert a device error code to a human-readable message
-  const char* getErrorString(uint8_t errorCode);
-
-  // Convert an opcode to the name of the operation
-  const char* getOpcodeName(uint8_t opcode);
 
   // Internal data
   Connection* connection;  // Bluetooth connection

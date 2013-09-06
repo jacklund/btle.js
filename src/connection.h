@@ -13,8 +13,8 @@ public:
   typedef void (*connectCallback)(void* data, int status, int events);
   typedef void (*closeCallback)(void* data);
   typedef void (*errorCallback)(void* data, const char* error);
-  typedef void (*readCallback)(void* data, uint8_t* buf, int len);
-  typedef void (*writeCallback)(void* data, int status);
+  typedef void (*readCallback)(void* data, uint8_t* buf, int len, const char* error);
+  typedef void (*writeCallback)(void* data, const char* error);
 
   // Constructor/Destructor
   Connection();
@@ -25,7 +25,6 @@ public:
 
   // Register callbacks
   void registerReadCallback(readCallback callback, void* cbData);
-  void registerErrorCallback(errorCallback callback, void* cbData);
 
   // Construct a buffer of the correct size to talk to the device
   uv_buf_t getBuffer();
@@ -55,8 +54,6 @@ private:
 
   readCallback readCb;
   void* readData;
-  errorCallback errorCb;
-  void* errorData;
 };
 
 #endif

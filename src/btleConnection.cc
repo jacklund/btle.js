@@ -97,7 +97,6 @@ BTLEConnection::Connect(const Arguments& args)
   }
 
   conn->connection = new Connection();
-  conn->connection->registerErrorCallback(onError, conn);
   conn->gatt = new Gatt(conn->connection);
   conn->gatt->onError(onError, conn);
   try {
@@ -115,7 +114,7 @@ BTLEConnection::FindInformation(const Arguments& args)
 {
   HandleScope scope;
 
-  if (args.Length() < 2) {
+  if (args.Length() < 3) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
   }
@@ -360,30 +359,36 @@ void
 BTLEConnection::onConnect(void* data, int status, int events)
 {
   BTLEConnection* conn = (BTLEConnection *) data;
+  conn->handleConnect(status, events);
+}
+
+void
+BTLEConnection::handleConnect(int status, int events)
+{
   if (status == 0) {
-    if (conn->connectionCallback.IsEmpty()) {
+    if (connectionCallback.IsEmpty()) {
       // Emit a 'connect' event, with no args
       const int argc = 1;
       Local<Value> argv[argc] = { String::New("connect") };
-      MakeCallback(conn->self, "emit", argc, argv);
+      MakeCallback(self, "emit", argc, argv);
     } else {
       // Call the provided callback
       const int argc = 1;
       Local<Value> argv[argc] = { Local<Value>::New(Null()) };
-      conn->connectionCallback->Call(conn->self, argc, argv);
+      connectionCallback->Call(self, argc, argv);
     }
   } else {
     // Got an error
-    if (conn->connectionCallback.IsEmpty()) {
+    if (connectionCallback.IsEmpty()) {
       // Emit an error event if no callback provided
-      conn->emit_error();
+      emit_error();
     } else {
       // Call the provided callback with the error
       uv_err_t err = uv_last_error(uv_default_loop());
       const int argc = 1;
       Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
       Local<Value> argv[argc] = { error };
-      conn->connectionCallback->Call(conn->self, argc, argv);
+      connectionCallback->Call(self, argc, argv);
     }
   }
 }
@@ -398,16 +403,41 @@ void
 BTLEConnection::sendFindInformation(struct callbackData* cd)
 {
     Persistent<Function> callback = static_cast<Function*>(cd->data);
-    const int argc = 1;
-    Local<Object> response = Local<Object>::New(cd->conn->findInfoResponse);
-    cd->conn->findInfoResponse.Clear();
-    Local<Value> argv[argc] = { response };
-    callback->Call(cd->conn->self,  argc, argv);
+    const int argc = 2;
+    Local<Object> response = Local<Object>::New(findInfoResponse);
+    findInfoResponse.Clear();
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), response };
+    callback->Call(self,  argc, argv);
+    delete cd;
+}
+
+const char*
+BTLEConnection::createErrorMessage(uint8_t err)
+{
+  const char* msg = Gatt::getErrorString(err);
+  char buffer[128];
+  if (msg == NULL) {
+    sprintf(buffer, "Error code %02X", err);
+    msg = buffer;
+  }
+  return msg;
+}
+
+void
+BTLEConnection::sendFindInfoError(struct callbackData* cd, uint8_t err, const char* error)
+{
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    const int argc = 2;
+    findInfoResponse.Dispose();
+    findInfoResponse.Clear();
+    const char* msg = error == NULL ? createErrorMessage(err) : error;
+    Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
+    callback->Call(self, argc, argv);
     delete cd;
 }
 
 void
-BTLEConnection::parseFindInfo(uint8_t*& ptr, uint16_t& handle, struct callbackData* cd, uint8_t* buf, int len)
+BTLEConnection::parseFindInfo(uint8_t*& ptr, uint16_t& handle, uint8_t* buf, int len)
 {
   uint8_t format = buf[0];
   while (ptr - buf < len) {
@@ -425,55 +455,73 @@ BTLEConnection::parseFindInfo(uint8_t*& ptr, uint16_t& handle, struct callbackDa
     }
     bt_uuid_to_string(&uuid, buffer, sizeof(buffer));
     Local<String> uuidString = String::New(buffer);
-    cd->conn->findInfoResponse->Set(handleLocal, uuidString);
+    findInfoResponse->Set(handleLocal, uuidString);
   }
 }
 
 // Find Information callback
 bool
-BTLEConnection::onFindInformation(uint8_t status, void* data, uint8_t* buf, int len)
+BTLEConnection::onFindInformation(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  if (status == 0) {
-    if (cd->conn->findInfoResponse.IsEmpty())
-      cd->conn->findInfoResponse = Persistent<Object>::New(Object::New());
+  return cd->conn->handleFindInformation(status, cd->startHandle, cd->endHandle, buf, len, cd, error);
+}
+
+bool
+BTLEConnection::handleFindInformation(uint8_t status, uint16_t startHandle,
+  uint16_t endHandle, uint8_t* buf, int len, struct callbackData* cd, const char* error)
+{
+  if (error) {
+  } else if (status == 0) {
+    // Create the response object
+    if (findInfoResponse.IsEmpty())
+      findInfoResponse = Persistent<Object>::New(Object::New());
+
+    // Parse the data
     uint8_t* ptr = &buf[1];
     uint16_t handle = 0;
-    cd->conn->parseFindInfo(ptr, handle, cd, buf, len);
-    if (handle < cd->endHandle) {
-      cd->startHandle = handle+1;
-      cd->conn->gatt->findInformation(cd->startHandle, cd->endHandle, onFindInformation, cd);
+    parseFindInfo(ptr, handle, buf, len);
+
+    // If we've got more data to retrieve, make another request
+    if (handle < endHandle) {
+      startHandle = handle+1;
+      gatt->findInformation(startHandle, endHandle, onFindInformation, cd);
+      // Signal we're not done
       return false;
     } else {
-      cd->conn->sendFindInformation(cd);
+      // We're done
+      sendFindInformation(cd);
     }
   } else {
-    if (status == ATT_ECODE_ATTR_NOT_FOUND && !cd->conn->findInfoResponse.IsEmpty()) {
-      cd->conn->sendFindInformation(cd);
+    // Attribute Not Found means we're done getting data
+    if (status == ATT_ECODE_ATTR_NOT_FOUND && !findInfoResponse.IsEmpty()) {
+      sendFindInformation(cd);
     } else {
-      // TODO: Add error handling here
-      fprintf(stderr, "Got error: %x\n", status);
+      sendFindInfoError(cd, status, error);
     }
   }
 
+  // We're done
   return true;
 }
 
 // Read attribute callback
 bool
-BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len)
+BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
-  if (status == 0) {
-    struct callbackData* cd = static_cast<struct callbackData*>(data);
-    Persistent<Function> callback = static_cast<Function*>(cd->data);
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  Persistent<Function> callback = static_cast<Function*>(cd->data);
+  if (status == 0 && error == NULL) {
     Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
-    const int argc = 1;
-    Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
-    callback->Call(cd->conn->self,  argc, argv);
+    const int argc = 2;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
+    callback->Call(cd->conn->self, argc, argv);
     delete cd;
   } else {
-    // TODO: Add error handling here
-    fprintf(stderr, "Got error: %x\n", status);
+    const int argc = 2;
+    const char* msg = error == NULL ? cd->conn->createErrorMessage(status) : error;
+    Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
+    callback->Call(cd->conn->self, argc, argv);
   }
 
   return true;
@@ -481,19 +529,21 @@ BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int le
 
 // Read notification callback
 bool
-BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len)
+BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
-  if (status == 0) {
-    struct callbackData* cd = static_cast<struct callbackData*>(data);
-    Persistent<Function> callback = static_cast<Function*>(cd->data);
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  Persistent<Function> callback = static_cast<Function*>(cd->data);
+  if (status == 0 && error == NULL) {
     Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
-    const int argc = 1;
-    Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
+    const int argc = 2;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
     callback->Call(cd->conn->self,  argc, argv);
     // NOTE: We don't delete cd here because we reuse it for the notifications
   } else {
-    // TODO: Add error handling here
-    fprintf(stderr, "Got error: %x\n", status);
+    const int argc = 2;
+    const char* msg = error == NULL ? cd->conn->createErrorMessage(status) : error;
+    Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
+    callback->Call(cd->conn->self, argc, argv);
   }
 
   return false;
@@ -501,20 +551,19 @@ BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int
 
 // Write callback
 void
-BTLEConnection::onWrite(void* data, int status)
+BTLEConnection::onWrite(void* data, const char* error)
 {
   struct callbackData* cd = (struct callbackData*) data;
-  if (status < 0) {
+  if (error) {
     // Error on write. Emit error if we don't have a callback
     if (cd->data == NULL) {
-      cd->conn->emit_error();
+      cd->conn->emit_error(error);
     } else {
       // Call the provided callback with the error data
       Persistent<Function> callback = static_cast<Function*>(cd->data);
-      uv_err_t err = uv_last_error(uv_default_loop());
       const int argc = 1;
-      Local<Value> error = ErrnoException(errno, "write", uv_strerror(err));
-      Local<Value> argv[argc] = { error };
+      Local<Value> err = ErrnoException(errno, "write", error);
+      Local<Value> argv[argc] = { err };
       callback->Call(cd->conn->self, argc, argv);
     }
   } else {
@@ -572,18 +621,12 @@ extern "C" void init(Handle<Object> exports)
   Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
   t->InstanceTemplate()->SetInternalFieldCount(2);
   t->SetClassName(String::New("BTLEConnection"));
-  NODE_SET_PROTOTYPE_METHOD(t, "connect",
-BTLEConnection::Connect);
-  NODE_SET_PROTOTYPE_METHOD(t, "findInformation",
-BTLEConnection::FindInformation);
-  NODE_SET_PROTOTYPE_METHOD(t, "close",
-BTLEConnection::Close);
-  NODE_SET_PROTOTYPE_METHOD(t, "readHandle",
-BTLEConnection::ReadHandle);
-  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener",
-BTLEConnection::AddNotificationListener);
-  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand",
-BTLEConnection::WriteCommand);
+  NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
+  NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
+  NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
+  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
+  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
+  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
 
   exports->Set(String::NewSymbol("Connection"), t->GetFunction());
 }

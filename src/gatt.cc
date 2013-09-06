@@ -256,71 +256,80 @@ Gatt::writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connecti
 // Read callback
 //
 void
-Gatt::onRead(void* data, uint8_t* buf, int nread)
+Gatt::onRead(void* data, uint8_t* buf, int nread, const char* error)
 {
   Gatt* gatt = (Gatt*) data;
+  gatt->handleRead(data, buf, nread, error);
+}
 
-  uint8_t opcode = buf[0];
-  struct readData* rd = NULL;
-  handle_t handle;
+void
+Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
+{
+  if (error) {
+    callbackCurrentRequest(0, NULL, 0, error);
+  } else {
+    uint8_t opcode = buf[0];
+    struct readData* rd = NULL;
+    handle_t handle;
 
-  switch (opcode) {
-    case ATT_OP_ERROR:
-      {
-        uint8_t request = *(uint8_t*) &buf[1];
-        uint8_t errorCode = *(uint8_t*) &buf[4];
-        if (gatt->currentRequest != NULL && gatt->currentRequest->request == request) {
-          gatt->callbackCurrentRequest(errorCode, NULL, 0);
-        }
-        else if (gatt->errorHandler != NULL) {
-          const char* message = gatt->getErrorString(errorCode);
-          char buffer[1024];
-          if (message != NULL) {
-            sprintf(buffer, "Error on %s for handle 0x%02X: %s",
-              gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
-          } else {
-            sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
-              gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
+    switch (opcode) {
+      case ATT_OP_ERROR:
+        {
+          uint8_t request = *(uint8_t*) &buf[1];
+          uint8_t errorCode = *(uint8_t*) &buf[4];
+          if (currentRequest != NULL && currentRequest->request == request) {
+            callbackCurrentRequest(errorCode, NULL, 0, NULL);
           }
-          gatt->errorHandler(gatt->errorData, buffer);
+          else if (errorHandler != NULL) {
+            const char* message = getErrorString(errorCode);
+            char buffer[1024];
+            if (message != NULL) {
+              sprintf(buffer, "Error on %s for handle 0x%02X: %s",
+                getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
+            } else {
+              sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
+                getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
+            }
+            errorHandler(errorData, buffer);
+          }
         }
-      }
-      break;
+        break;
 
-    case ATT_OP_HANDLE_NOTIFY:
-      handle = *(handle_t*)(&buf[1]);
-      {
-        LockGuard(gatt->notificationMapLock);
-        NotificationMap::iterator it = gatt->notificationMap.find(handle);
-        if (it != gatt->notificationMap.end()) {
-          rd = it->second;
+      case ATT_OP_HANDLE_NOTIFY:
+        handle = *(handle_t*)(&buf[1]);
+        {
+          LockGuard(this->notificationMapLock);
+          NotificationMap::iterator it = notificationMap.find(handle);
+          if (it != notificationMap.end()) {
+            rd = it->second;
+          }
         }
-      }
-      if (rd != NULL) {
-        if (rd->callback != NULL) {
-          // Note: Remove the opcode and handle before calling the callback
-          rd->callback(0, rd->data, (uint8_t*) (&buf[3]), nread - 3);
+        if (rd != NULL) {
+          if (rd->callback != NULL) {
+            // Note: Remove the opcode and handle before calling the callback
+            rd->callback(0, rd->data, (uint8_t*) (&buf[3]), nread - 3, error);
+          }
+        } else {
+          if (errorHandler != NULL) {
+            char buffer[1024];
+            sprintf(buffer, "Got unexpected notification for handle %x", handle);
+            errorHandler(errorData, buffer);
+          }
         }
-      } else {
-        if (gatt->errorHandler != NULL) {
-          char buffer[1024];
-          sprintf(buffer, "Got unexpected notification for handle %x", handle);
-          gatt->errorHandler(gatt->errorData, buffer);
-        }
-      }
-      break;
+        break;
 
-    default:
-      if (gatt->currentRequest != NULL) {
-        // Note: Remove the opcode before calling the callback
-        gatt->callbackCurrentRequest(0, (uint8_t*)(&buf[1]), nread-1);
-      } else {
-        if (gatt->errorHandler != NULL) {
-          char buffer[1024];
-          sprintf(buffer, "Got unexpected data with opcode %x\n", opcode);
-          gatt->errorHandler(gatt->errorData, buffer);
+      default:
+        if (currentRequest != NULL) {
+          // Note: Remove the opcode before calling the callback
+          callbackCurrentRequest(0, (uint8_t*)(&buf[1]), nread-1, NULL);
+        } else {
+          if (errorHandler != NULL) {
+            char buffer[1024];
+            sprintf(buffer, "Got unexpected data with opcode %x\n", opcode);
+            errorHandler(errorData, buffer);
+          }
         }
-      }
+    }
   }
 }
 
@@ -329,10 +338,10 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
 //
 
 void
-Gatt::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len)
+Gatt::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error)
 {
   if (currentRequest->callback != NULL) {
-    bool remove = currentRequest->callback(status, currentRequest->data, buffer, len);
+    bool remove = currentRequest->callback(status, currentRequest->data, buffer, len, error);
     if (remove) removeCurrentRequest();
   }
 }

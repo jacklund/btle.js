@@ -17,7 +17,7 @@ struct writeData
 // Constructor
 Connection::Connection()
 : sock(0), tcp(NULL), poll_handle(NULL), imtu(0), cid(0),
-  readCb(NULL), readData(NULL), errorCb(NULL), errorData(NULL)
+  readCb(NULL), readData(NULL)
 {
 }
 
@@ -70,14 +70,6 @@ Connection::registerReadCallback(readCallback callback, void* cbData)
 {
   this->readCb = callback;
   this->readData = cbData;
-}
-
-// Register an error callback
-void
-Connection::registerErrorCallback(errorCallback callback, void* cbData)
-{
-  this->errorCb = callback;
-  this->errorData = cbData;
 }
 
 // Write to the device
@@ -134,20 +126,13 @@ void
 Connection::onWrite(uv_write_t* req, int status)
 {
   struct writeData* wd = (struct writeData*) req->data;
-  if (status < 0) {
-    Connection* conn = wd->connection;
-    if (conn->errorCb) {
-      // We call the callback and let it decide whether to close the
-      // connection
+  if (wd->callback) {
+    if (status < 0) {
       uv_err_t err = uv_last_error(uv_default_loop());
-      conn->errorCb(conn->errorData, uv_strerror(err));
+      wd->callback(wd->data, uv_strerror(err));
     } else {
-      // If no error callback, close the connection on error
-      conn->close(NULL, NULL);
-      // TODO: Throw an exception?
+      wd->callback(wd->data, NULL);
     }
-  } else {
-    if (wd->callback) wd->callback(wd->data, status);
   }
 }
 
@@ -170,21 +155,13 @@ Connection::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
   Connection* conn = static_cast<Connection*>(stream->data);
 
-  // nread < 0 signals an error
-  if (nread < 0) {
-    if (conn->errorCb) {
-      // We call the callback and let it decide whether to close the
-      // connection
+  if (conn->readCb != NULL) {
+    // nread < 0 signals an error
+    if (nread < 0) {
       uv_err_t err = uv_last_error(uv_default_loop());
-      conn->errorCb(conn->errorData, uv_strerror(err));
+      conn->readCb(conn->readData, NULL, nread, uv_strerror(err));
     } else {
-      // If no error callback, close the connection on error
-      conn->close(NULL, NULL);
-      // TODO: Throw an exception?
-    }
-  } else {
-    if (conn->readCb != NULL) {
-      conn->readCb(conn->readData, (uint8_t*) buf.base, nread);
+      conn->readCb(conn->readData, (uint8_t*) buf.base, nread, NULL);
     }
   }
 
