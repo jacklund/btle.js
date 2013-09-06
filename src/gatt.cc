@@ -22,10 +22,12 @@ private:
 
 // Struct for read callbacks
 struct Gatt::readData {
-  readData() : data(NULL), callback(NULL) {}
+  readData() : request(0), expectedResponse(0), data(NULL), callback(NULL) {}
 
+  opcode_t request;
+  opcode_t expectedResponse;
   void* data;
-  Connection::readCallback callback;
+  readCallback callback;
 };
 
 // Encode a Bluetooth LE packet
@@ -41,7 +43,7 @@ Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
     const uint8_t* value, size_t vlen)
 {
   // The minimum packet length
-	size_t ret = sizeof(buffer[0]) + sizeof(handle);
+  size_t ret = sizeof(buffer[0]) + sizeof(handle);
 
   // Validating the buffer
   if (buffer == NULL)
@@ -59,14 +61,59 @@ Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
   }
 
   // Write the opcode and handle
-	buffer[0] = opcode;
-	att_put_u16(handle, &buffer[1]);
+  buffer[0] = opcode;
+  att_put_u16(handle, &buffer[1]);
 
   // Write the value
-	if (vlen > 0) {
-		memcpy(&buffer[3], value, vlen);
-		ret += vlen;
-	}
+  if (vlen > 0) {
+    memcpy(&buffer[3], value, vlen);
+    ret += vlen;
+  }
+
+  // Return the actual length of the data
+  return ret;
+}
+
+size_t
+Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid, uint8_t* buffer, size_t buflen)
+{
+  // The minimum packet length
+	size_t ret = sizeof(buffer[0]) + sizeof(startHandle) + sizeof(endHandle);
+
+  // Validating the buffer
+  if (buffer == NULL)
+    return 0;
+
+  if (buflen < ret)
+    return 0;
+
+  // Write the opcode and handle
+	buffer[0] = opcode;
+	att_put_u16(startHandle, &buffer[1]);
+  att_put_u16(endHandle, &buffer[3]);
+
+  // Write the UUID
+  if (uuid != NULL) {
+    switch (uuid->type) {
+      case bt_uuid_t::BT_UUID16:
+        att_put_u16(uuid->value.u16, &buffer[5]);
+        ret += sizeof(uuid->value.u16);
+        break;
+
+      case bt_uuid_t::BT_UUID32:
+        att_put_u32(uuid->value.u32, &buffer[5]);
+        ret += sizeof(uuid->value.u32);
+        break;
+
+      case bt_uuid_t::BT_UUID128:
+        att_put_u128(uuid->value.u128, &buffer[5]);
+        ret += sizeof(uuid->value.u128);
+        break;
+
+      default:
+        return 0;
+    }
+  }
 
   // Return the actual length of the data
 	return ret;
@@ -74,18 +121,53 @@ Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
 
 // Constructor
 Gatt::Gatt(Connection* conn)
-  : connection(conn), errorHandler(NULL), errorData(NULL)
+  : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
-  pthread_mutex_init(&readMapLock, NULL);
   pthread_mutex_init(&notificationMapLock, NULL);
 }
 
 // Destructor
 Gatt::~Gatt()
 {
-  pthread_mutex_destroy(&readMapLock);
   pthread_mutex_destroy(&notificationMapLock);
+}
+
+bool
+Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, readCallback callback) {
+  // Set up the callback for the read
+  struct readData* rd = new struct readData();
+  rd->request = ATT_OP_FIND_INFO_REQ;
+  rd->expectedResponse = ATT_OP_FIND_INFO_RESP;
+  rd->data = data;
+  rd->callback = callback;
+
+  bool ret =__sync_bool_compare_and_swap(&currentRequest, NULL, rd);
+  if (!ret) delete rd;
+
+  return ret;
+}
+
+//
+// Issue a "Find Information" command
+//
+void
+Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, readCallback callback, void* data)
+{
+  bool requestUpdate = false;
+  if (currentRequest != NULL && currentRequest->request == ATT_OP_FIND_INFO_REQ) {
+    requestUpdate = true;
+  }
+  if (requestUpdate || setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, data, callback)) {
+    // Write to the device
+    uv_buf_t buf = connection->getBuffer();
+    size_t len = encode(ATT_OP_FIND_INFO_REQ, startHandle, endHandle, NULL, (uint8_t*) buf.base, buf.len);
+    buf.len = len;
+    connection->write(buf);
+  } else {
+    // TODO: return error saying we already have an outstanding request
+    fprintf(stderr, "Already have request pending\n");
+  }
 }
 
 //
@@ -96,24 +178,16 @@ Gatt::~Gatt()
 //  data     - Optional callback data
 //
 void
-Gatt::readAttribute(uint16_t handle, Connection::readCallback callback, void* data)
+Gatt::readAttribute(uint16_t handle, readCallback callback, void* data)
 {
-  // Set up the callback for the read
-  struct readData* rd = new struct readData();
-  rd->data = data;
-  rd->callback = callback;
-
-  // Write the callback into the map
-  {
-    LockGuard(this->readMapLock);
-    readMap.insert(std::pair<uint8_t, struct readData*>(ATT_OP_READ_RESP, rd));
+  if (setCurrentRequest(ATT_OP_READ_REQ, ATT_OP_READ_RESP, data, callback)) {
+    // Write to the device
+    uv_buf_t buf = connection->getBuffer();
+    size_t len = encode(ATT_OP_READ_REQ, handle, (uint8_t*) buf.base, buf.len);
+    buf.len = len;
+    connection->write(buf);
+  } else {
   }
-
-  // Write to the device
-  uv_buf_t buf = connection->getBuffer();
-  size_t len = encode(ATT_OP_READ_REQ, handle, (uint8_t*) buf.base, buf.len);
-  buf.len = len;
-  connection->write(buf);
 }
 
 //
@@ -124,7 +198,7 @@ Gatt::readAttribute(uint16_t handle, Connection::readCallback callback, void* da
 //  data     - Optional callback data
 //
 void
-Gatt::listenForNotifications(uint16_t handle, Connection::readCallback callback, void* data)
+Gatt::listenForNotifications(uint16_t handle, readCallback callback, void* data)
 {
   // Set up the read callback
   struct readData* rd = new struct readData();
@@ -192,18 +266,24 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
 
   switch (opcode) {
     case ATT_OP_ERROR:
-      if (gatt->errorHandler != NULL) {
+      {
+        uint8_t request = *(uint8_t*) &buf[1];
         uint8_t errorCode = *(uint8_t*) &buf[4];
-        const char* message = gatt->getErrorString(errorCode);
-        char buffer[1024];
-        if (message != NULL) {
-          sprintf(buffer, "Error on %s for handle 0x%02X: %s",
-            gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
-        } else {
-          sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
-            gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
+        if (gatt->currentRequest != NULL && gatt->currentRequest->request == request) {
+          gatt->callbackCurrentRequest(errorCode, NULL, 0);
         }
-        gatt->errorHandler(gatt->errorData, buffer);
+        else if (gatt->errorHandler != NULL) {
+          const char* message = gatt->getErrorString(errorCode);
+          char buffer[1024];
+          if (message != NULL) {
+            sprintf(buffer, "Error on %s for handle 0x%02X: %s",
+              gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
+          } else {
+            sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
+              gatt->getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
+          }
+          gatt->errorHandler(gatt->errorData, buffer);
+        }
       }
       break;
 
@@ -219,7 +299,7 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
       if (rd != NULL) {
         if (rd->callback != NULL) {
           // Note: Remove the opcode and handle before calling the callback
-          rd->callback(rd->data, (uint8_t*) (&buf[3]), nread - 3);
+          rd->callback(0, rd->data, (uint8_t*) (&buf[3]), nread - 3);
         }
       } else {
         if (gatt->errorHandler != NULL) {
@@ -231,22 +311,9 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
       break;
 
     default:
-      {
-        LockGuard(gatt->readMapLock);
-
-        ReadMap::iterator it = gatt->readMap.find(opcode);
-        if (it != gatt->readMap.end()) {
-          rd = it->second;
-          // If this opcode only has a single response, remove
-          // the entry from the map
-          if (gatt->isSingleResponse(opcode)) gatt->readMap.erase(it);
-        }
-      }
-      if (rd != NULL) {
-        if (rd->callback != NULL) {
-          // Note: Remove the opcode beofre calling the callback
-          rd->callback(rd->data, (uint8_t*) (&buf[1]), nread - 1);
-        }
+      if (gatt->currentRequest != NULL) {
+        // Note: Remove the opcode before calling the callback
+        gatt->callbackCurrentRequest(0, (uint8_t*)(&buf[1]), nread-1);
       } else {
         if (gatt->errorHandler != NULL) {
           char buffer[1024];
@@ -261,22 +328,20 @@ Gatt::onRead(void* data, uint8_t* buf, int nread)
 // Utilities
 //
 
-//
-// Check if this opcode yields only a single response
-//
-bool
-Gatt::isSingleResponse(uint8_t opcode)
+void
+Gatt::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len)
 {
-  switch (opcode)
-  {
-    case ATT_OP_HANDLE_NOTIFY:
-    case ATT_OP_HANDLE_IND:
-    case ATT_OP_HANDLE_CNF:
-      return false;
-
-    default:
-      return true;
+  if (currentRequest->callback != NULL) {
+    bool remove = currentRequest->callback(status, currentRequest->data, buffer, len);
+    if (remove) removeCurrentRequest();
   }
+}
+
+void
+Gatt::removeCurrentRequest()
+{
+  struct readData* rd = __sync_lock_test_and_set(&currentRequest, NULL);
+  delete rd;
 }
 
 const char*

@@ -33,9 +33,11 @@
 #include <stdbool.h>
 #include <uv.h>
 #include <bluetooth/bluetooth.h>
+#include <bluetooth/uuid.h>
 
 #ifdef __cplusplus
 extern "C" {
+#define BT_UUID16 bt_uuid_t::BT_UUID16
 #endif
 
 /* Attribute Protocol Opcodes */
@@ -185,9 +187,92 @@ struct set_opts {
 	uint32_t priority;
 };
 
+static inline uint8_t att_get_u8(const void *ptr)
+{
+	const uint8_t *u8_ptr = (const uint8_t*) ptr;
+	return bt_get_unaligned(u8_ptr);
+}
+
+static inline uint16_t att_get_u16(const void *ptr)
+{
+	const uint16_t *u16_ptr = (const uint16_t*) ptr;
+	return btohs(bt_get_unaligned(u16_ptr));
+}
+
+static inline uint32_t att_get_u32(const void *ptr)
+{
+	const uint32_t *u32_ptr = (const uint32_t*) ptr;
+	return btohl(bt_get_unaligned(u32_ptr));
+}
+
+static inline uint128_t att_get_u128(const void *ptr)
+{
+	const uint128_t *u128_ptr = (const uint128_t*) ptr;
+	uint128_t dst;
+
+	btoh128(u128_ptr, &dst);
+
+	return dst;
+}
+
+static inline void att_put_u8(uint8_t src, void *dst)
+{
+	bt_put_unaligned(src, (uint8_t *) dst);
+}
+
 static inline void att_put_u16(uint16_t src, void *dst)
 {
 	bt_put_unaligned(htobs(src), (uint16_t *) dst);
+}
+
+static inline void att_put_u32(uint32_t src, void *dst)
+{
+	bt_put_unaligned(htobl(src), (uint32_t *) dst);
+}
+
+static inline void att_put_u128(uint128_t src, void *dst)
+{
+	uint128_t *d128 = (uint128_t*) dst;
+
+	htob128(&src, d128);
+}
+
+static inline void att_put_uuid16(bt_uuid_t src, void *dst)
+{
+	att_put_u16(src.value.u16, dst);
+}
+
+static inline void att_put_uuid128(bt_uuid_t src, void *dst)
+{
+	att_put_u128(src.value.u128, dst);
+}
+
+static inline void att_put_uuid(bt_uuid_t src, void *dst)
+{
+	if (src.type == BT_UUID16)
+		att_put_uuid16(src, dst);
+	else
+		att_put_uuid128(src, dst);
+}
+
+static inline bt_uuid_t att_get_uuid16(const void *ptr)
+{
+	bt_uuid_t uuid;
+
+	bt_uuid16_create(&uuid, att_get_u16(ptr));
+
+	return uuid;
+}
+
+static inline bt_uuid_t att_get_uuid128(const void *ptr)
+{
+	bt_uuid_t uuid;
+	uint128_t value;
+
+	value  = att_get_u128(ptr);
+	bt_uuid128_create(&uuid, value);
+
+	return uuid;
 }
 
 bool bt_io_accept(int sock);
@@ -201,6 +286,7 @@ int bt_io_connect(struct set_opts* opts);
 int bt_io_listen(struct set_opts* opts);
 
 #ifdef __cplusplus
+#undef BT_UUID16
 }
 #endif
 

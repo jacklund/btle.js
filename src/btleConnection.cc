@@ -11,13 +11,16 @@ using namespace v8;
 using namespace node;
 
 // Constructor definition
-Persistent<Function> BTLEConnection::constructor;
+Persistent<Function>
+BTLEConnection::constructor;
 
 // Callback data structure
 struct callbackData {
-  callbackData() : conn(NULL), data(NULL) {}
+  callbackData() : conn(NULL), data(NULL), startHandle(0), endHandle(0) {}
   BTLEConnection* conn;
   void* data;
+  uint16_t startHandle;
+  uint16_t endHandle;
 };
 
 // Constructor
@@ -33,7 +36,8 @@ BTLEConnection::~BTLEConnection()
 }
 
 // Node.js initialization
-void BTLEConnection::Init()
+void
+BTLEConnection::Init()
 {
   // Prepare constructor template
   Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
@@ -44,7 +48,8 @@ void BTLEConnection::Init()
 }
 
 // Node.js new object construction
-Handle<Value> BTLEConnection::New(const Arguments& args)
+Handle<Value>
+BTLEConnection::New(const Arguments& args)
 {
   HandleScope scope;
 
@@ -58,7 +63,8 @@ Handle<Value> BTLEConnection::New(const Arguments& args)
 }
 
 // Connect node.js method
-Handle<Value> BTLEConnection::Connect(const Arguments& args)
+Handle<Value>
+BTLEConnection::Connect(const Arguments& args)
 {
   HandleScope scope;
   struct set_opts opts;
@@ -103,8 +109,54 @@ Handle<Value> BTLEConnection::Connect(const Arguments& args)
   return scope.Close(Undefined());
 }
 
+// Send a Find Information request
+Handle<Value>
+BTLEConnection::FindInformation(const Arguments& args)
+{
+  HandleScope scope;
+
+  if (args.Length() < 2) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("First argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("Second argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[2]->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New("Third argument must be a callback")));
+    return scope.Close(Undefined());
+  }
+
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
+  callback.MakeWeak(*callback, weak_cb);
+
+  int startHandle, endHandle;
+  getIntValue(args[0]->ToNumber(), startHandle);
+  getIntValue(args[1]->ToNumber(), endHandle);
+  
+  struct callbackData* cd = new struct callbackData();
+  cd->data = *callback;
+  cd->conn = conn;
+  cd->startHandle = startHandle;
+  cd->endHandle = endHandle;
+
+  conn->gatt->findInformation(startHandle, endHandle, onFindInformation, cd);
+  return scope.Close(Undefined());
+}
+
 // Read an attribute
-Handle<Value> BTLEConnection::ReadHandle(const Arguments& args)
+Handle<Value>
+BTLEConnection::ReadHandle(const Arguments& args)
 {
   HandleScope scope;
 
@@ -139,7 +191,8 @@ Handle<Value> BTLEConnection::ReadHandle(const Arguments& args)
 }
 
 // Write an attribute without a response
-Handle<Value> BTLEConnection::WriteCommand(const v8::Arguments& args)
+Handle<Value>
+BTLEConnection::WriteCommand(const v8::Arguments& args)
 {
   HandleScope scope;
 
@@ -187,7 +240,8 @@ Handle<Value> BTLEConnection::WriteCommand(const v8::Arguments& args)
 }
 
 // Write an attribute with a response
-Handle<Value> BTLEConnection::WriteRequest(const v8::Arguments& args)
+Handle<Value>
+BTLEConnection::WriteRequest(const v8::Arguments& args)
 {
   HandleScope scope;
 
@@ -217,7 +271,8 @@ Handle<Value> BTLEConnection::WriteRequest(const v8::Arguments& args)
 }
 
 // Add a listener for notifications
-Handle<Value> BTLEConnection::AddNotificationListener(const Arguments& args)
+Handle<Value>
+BTLEConnection::AddNotificationListener(const Arguments& args)
 {
   HandleScope scope;
 
@@ -253,7 +308,8 @@ Handle<Value> BTLEConnection::AddNotificationListener(const Arguments& args)
 }
 
 // Close the connection
-Handle<Value> BTLEConnection::Close(const Arguments& args)
+Handle<Value>
+BTLEConnection::Close(const Arguments& args)
 {
   HandleScope scope;
 
@@ -278,7 +334,8 @@ Handle<Value> BTLEConnection::Close(const Arguments& args)
 }
 
 // Emit an 'error' event
-void BTLEConnection::emit_error()
+void
+BTLEConnection::emit_error()
 {
     uv_err_t err = uv_last_error(uv_default_loop());
     const int argc = 2;
@@ -288,7 +345,8 @@ void BTLEConnection::emit_error()
     MakeCallback(this->self, "emit", argc, argv);
 }
 
-void BTLEConnection::emit_error(const char* errorMessage)
+void
+BTLEConnection::emit_error(const char* errorMessage)
 {
     const int argc = 2;
     Local<Value> error = String::New(errorMessage);
@@ -298,7 +356,8 @@ void BTLEConnection::emit_error(const char* errorMessage)
 }
 
 // Callback executed when we get connected
-void BTLEConnection::onConnect(void* data, int status, int events)
+void
+BTLEConnection::onConnect(void* data, int status, int events)
 {
   BTLEConnection* conn = (BTLEConnection *) data;
   if (status == 0) {
@@ -335,32 +394,114 @@ static void onFree(char* data, void* hint)
   delete data;
 }
 
-// Read attribute callback
-void BTLEConnection::onReadAttribute(void* data, uint8_t* buf, int len)
+void
+BTLEConnection::sendFindInformation(struct callbackData* cd)
+{
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    const int argc = 1;
+    Local<Object> response = Local<Object>::New(cd->conn->findInfoResponse);
+    cd->conn->findInfoResponse.Clear();
+    Local<Value> argv[argc] = { response };
+    callback->Call(cd->conn->self,  argc, argv);
+    delete cd;
+}
+
+void
+BTLEConnection::parseFindInfo(uint8_t*& ptr, uint16_t& handle, struct callbackData* cd, uint8_t* buf, int len)
+{
+  uint8_t format = buf[0];
+  while (ptr - buf < len) {
+    handle = att_get_u16(ptr);
+    Local<Integer> handleLocal = Integer::New(handle);
+    ptr += sizeof(uint16_t);
+    char buffer[128];
+    bt_uuid_t uuid;
+    if (format == ATT_FIND_INFO_RESP_FMT_16BIT) {
+      uuid = att_get_uuid16(ptr);
+      ptr += sizeof(uint16_t);
+    } else {
+      uuid = att_get_uuid128(ptr);
+      ptr += sizeof(uint128_t);
+    }
+    bt_uuid_to_string(&uuid, buffer, sizeof(buffer));
+    Local<String> uuidString = String::New(buffer);
+    cd->conn->findInfoResponse->Set(handleLocal, uuidString);
+  }
+}
+
+// Find Information callback
+bool
+BTLEConnection::onFindInformation(uint8_t status, void* data, uint8_t* buf, int len)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  Persistent<Function> callback = static_cast<Function*>(cd->data);
-  Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
-  const int argc = 1;
-  Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
-  callback->Call(cd->conn->self,  argc, argv);
-  delete cd;
+  if (status == 0) {
+    if (cd->conn->findInfoResponse.IsEmpty())
+      cd->conn->findInfoResponse = Persistent<Object>::New(Object::New());
+    uint8_t* ptr = &buf[1];
+    uint16_t handle = 0;
+    cd->conn->parseFindInfo(ptr, handle, cd, buf, len);
+    if (handle < cd->endHandle) {
+      cd->startHandle = handle+1;
+      cd->conn->gatt->findInformation(cd->startHandle, cd->endHandle, onFindInformation, cd);
+      return false;
+    } else {
+      cd->conn->sendFindInformation(cd);
+    }
+  } else {
+    if (status == ATT_ECODE_ATTR_NOT_FOUND && !cd->conn->findInfoResponse.IsEmpty()) {
+      cd->conn->sendFindInformation(cd);
+    } else {
+      // TODO: Add error handling here
+      fprintf(stderr, "Got error: %x\n", status);
+    }
+  }
+
+  return true;
+}
+
+// Read attribute callback
+bool
+BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len)
+{
+  if (status == 0) {
+    struct callbackData* cd = static_cast<struct callbackData*>(data);
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
+    const int argc = 1;
+    Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
+    callback->Call(cd->conn->self,  argc, argv);
+    delete cd;
+  } else {
+    // TODO: Add error handling here
+    fprintf(stderr, "Got error: %x\n", status);
+  }
+
+  return true;
 }
 
 // Read notification callback
-void BTLEConnection::onReadNotification(void* data, uint8_t* buf, int len)
+bool
+BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len)
 {
-  struct callbackData* cd = static_cast<struct callbackData*>(data);
-  Persistent<Function> callback = static_cast<Function*>(cd->data);
-  Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
-  const int argc = 1;
-  Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
-  callback->Call(cd->conn->self,  argc, argv);
-  // NOTE: We don't delete cd here because we reuse it for the notifications
+  if (status == 0) {
+    struct callbackData* cd = static_cast<struct callbackData*>(data);
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    Buffer* buffer = Buffer::New((char*) buf, len, onFree, NULL);
+    const int argc = 1;
+    Local<Value> argv[argc] = { Local<Value>::New(buffer->handle_) };
+    callback->Call(cd->conn->self,  argc, argv);
+    // NOTE: We don't delete cd here because we reuse it for the notifications
+  } else {
+    // TODO: Add error handling here
+    fprintf(stderr, "Got error: %x\n", status);
+  }
+
+  return false;
 }
 
 // Write callback
-void BTLEConnection::onWrite(void* data, int status)
+void
+BTLEConnection::onWrite(void* data, int status)
 {
   struct callbackData* cd = (struct callbackData*) data;
   if (status < 0) {
@@ -388,7 +529,8 @@ void BTLEConnection::onWrite(void* data, int status)
 }
 
 // Called when we request a value be made "weak"
-void BTLEConnection::weak_cb(Persistent<Value> object, void* parameter)
+void
+BTLEConnection::weak_cb(Persistent<Value> object, void* parameter)
 {
   Function* callback = static_cast<Function*>(parameter);
 
@@ -399,7 +541,8 @@ void BTLEConnection::weak_cb(Persistent<Value> object, void* parameter)
 }
 
 // Close callback
-void BTLEConnection::onClose(void* data)
+void
+BTLEConnection::onClose(void* data)
 {
   BTLEConnection* conn = (BTLEConnection *) data;
 
@@ -415,7 +558,9 @@ void BTLEConnection::onClose(void* data)
   }
 }
 
-void BTLEConnection::onError(void* data, const char* error) {
+void
+BTLEConnection::onError(void* data, const char* error)
+{
   BTLEConnection* conn = (BTLEConnection*) data;
 
   conn->emit_error(error);
@@ -427,11 +572,18 @@ extern "C" void init(Handle<Object> exports)
   Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
   t->InstanceTemplate()->SetInternalFieldCount(2);
   t->SetClassName(String::New("BTLEConnection"));
-  NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
-  NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
-  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
-  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
-  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
+  NODE_SET_PROTOTYPE_METHOD(t, "connect",
+BTLEConnection::Connect);
+  NODE_SET_PROTOTYPE_METHOD(t, "findInformation",
+BTLEConnection::FindInformation);
+  NODE_SET_PROTOTYPE_METHOD(t, "close",
+BTLEConnection::Close);
+  NODE_SET_PROTOTYPE_METHOD(t, "readHandle",
+BTLEConnection::ReadHandle);
+  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener",
+BTLEConnection::AddNotificationListener);
+  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand",
+BTLEConnection::WriteCommand);
 
   exports->Set(String::NewSymbol("Connection"), t->GetFunction());
 }
