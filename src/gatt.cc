@@ -121,7 +121,8 @@ Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t
 
 // Constructor
 Gatt::Gatt(Connection* conn)
-  : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL)
+  : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
+    attrListData(NULL), endHandle(0)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&notificationMapLock, NULL);
@@ -152,21 +153,59 @@ Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, readCal
 // Issue a "Find Information" command
 //
 void
-Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, readCallback callback, void* data)
+Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, attributeListCallback callback, void* data)
 {
-  bool requestUpdate = false;
-  if (currentRequest != NULL && currentRequest->request == ATT_OP_FIND_INFO_REQ) {
-    requestUpdate = true;
-  }
-  if (requestUpdate || setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, data, callback)) {
-    // Write to the device
-    uv_buf_t buf = connection->getBuffer();
-    size_t len = encode(ATT_OP_FIND_INFO_REQ, startHandle, endHandle, NULL, (uint8_t*) buf.base, buf.len);
-    buf.len = len;
-    connection->write(buf);
+  if (setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, this, onFindInfo)) {
+    this->attributeList.clear();
+    this->attrListCallback = callback;
+    this->attrListData = data;
+    this->endHandle = endHandle;
+
+    doFindInformation(startHandle, endHandle);
   } else {
     // TODO: return error saying we already have an outstanding request
     fprintf(stderr, "Already have request pending\n");
+  }
+}
+
+void
+Gatt::doFindInformation(handle_t startHandle, handle_t endHandle)
+{
+  // Write to the device
+  uv_buf_t buf = connection->getBuffer();
+  size_t len = encode(ATT_OP_FIND_INFO_REQ, startHandle, endHandle, NULL, (uint8_t*) buf.base, buf.len);
+  buf.len = len;
+  connection->write(buf);
+}
+
+bool
+Gatt::onFindInfo(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+{
+  Gatt* gatt = (Gatt*) data;
+  return gatt->handleFindInfo(status, buf, len, error);
+}
+
+bool
+Gatt::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error)
+{
+  if (error) {
+    this->attrListCallback(status, this->attrListData, this->attributeList, error);
+    return true;
+  } else if (status == 0) {
+    parseAttributeList(this->attributeList, buf, len);
+    if (this->attributeList.back().handle < endHandle) {
+      doFindInformation(this->attributeList.back().handle+1, endHandle);
+      return false;
+    } else {
+      this->attrListCallback(status, this->attrListData, this->attributeList, error);
+      return true;
+    }
+  } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
+    this->attrListCallback(0, this->attrListData, this->attributeList, error);
+    return true;
+  } else {
+    this->attrListCallback(status, this->attrListData, this->attributeList, error);
+    return true;
   }
 }
 
@@ -330,6 +369,26 @@ Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
           }
         }
     }
+  }
+}
+
+void
+Gatt::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
+{
+  uint8_t format = buf[0];
+  uint8_t* ptr = &buf[1];
+  struct Attribute attribute;
+  while (ptr - buf < len) {
+    attribute.handle = att_get_u16(ptr);
+    ptr += sizeof(handle_t);
+    if (format == ATT_FIND_INFO_RESP_FMT_16BIT) {
+      attribute.uuid = att_get_uuid16(ptr);
+      ptr += sizeof(uint16_t);
+    } else {
+      attribute.uuid = att_get_uuid128(ptr);
+      ptr += sizeof(uint128_t);
+    }
+    list.push_back(attribute);
   }
 }
 

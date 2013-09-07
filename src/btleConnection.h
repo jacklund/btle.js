@@ -40,20 +40,18 @@ protected:
   static bool onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static bool onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static void onWrite(void* data, const char* error);
-  static bool onFindInformation(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  static void onFindInformation(uint8_t status, void* data, Gatt::AttributeList& list, const char* error);
   static void onError(void* data, const char* error);
 
   void handleConnect(int status, int events);
-  bool handleFindInformation(uint8_t status, uint16_t startHandle,
-    uint16_t endHandle, uint8_t* buf, int len, struct callbackData* cd, const char* error);
+  void handleFindInformation(uint8_t status, Gatt::AttributeList& list, struct callbackData* cd, const char* error);
 
   // Callback called when we tell v8 to make a reference weak
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);
 
   // Send off the Find Information data to node.js
-  void sendFindInformation(struct callbackData* cd);
   void sendFindInfoError(struct callbackData* cd, uint8_t err, const char* error);
-  void parseFindInfo(uint8_t*& ptr, uint16_t& handle, uint8_t* buf, int len);
+
   const char* createErrorMessage(uint8_t err);
 
 private:
@@ -64,7 +62,6 @@ private:
   Connection* connection;
   v8::Persistent<v8::Function> connectionCallback;
   v8::Persistent<v8::Function> closeCallback;
-  v8::Persistent<v8::Object> findInfoResponse;
 };
 
 #endif

@@ -399,18 +399,6 @@ static void onFree(char* data, void* hint)
   delete data;
 }
 
-void
-BTLEConnection::sendFindInformation(struct callbackData* cd)
-{
-    Persistent<Function> callback = static_cast<Function*>(cd->data);
-    const int argc = 2;
-    Local<Object> response = Local<Object>::New(findInfoResponse);
-    findInfoResponse.Clear();
-    Local<Value> argv[argc] = { Local<Value>::New(Null()), response };
-    callback->Call(self,  argc, argv);
-    delete cd;
-}
-
 const char*
 BTLEConnection::createErrorMessage(uint8_t err)
 {
@@ -428,81 +416,46 @@ BTLEConnection::sendFindInfoError(struct callbackData* cd, uint8_t err, const ch
 {
     Persistent<Function> callback = static_cast<Function*>(cd->data);
     const int argc = 2;
-    findInfoResponse.Dispose();
-    findInfoResponse.Clear();
     const char* msg = error == NULL ? createErrorMessage(err) : error;
     Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
     callback->Call(self, argc, argv);
     delete cd;
 }
 
-void
-BTLEConnection::parseFindInfo(uint8_t*& ptr, uint16_t& handle, uint8_t* buf, int len)
-{
-  uint8_t format = buf[0];
-  while (ptr - buf < len) {
-    handle = att_get_u16(ptr);
-    Local<Integer> handleLocal = Integer::New(handle);
-    ptr += sizeof(uint16_t);
-    char buffer[128];
-    bt_uuid_t uuid;
-    if (format == ATT_FIND_INFO_RESP_FMT_16BIT) {
-      uuid = att_get_uuid16(ptr);
-      ptr += sizeof(uint16_t);
-    } else {
-      uuid = att_get_uuid128(ptr);
-      ptr += sizeof(uint128_t);
-    }
-    bt_uuid_to_string(&uuid, buffer, sizeof(buffer));
-    Local<String> uuidString = String::New(buffer);
-    findInfoResponse->Set(handleLocal, uuidString);
-  }
-}
-
 // Find Information callback
-bool
-BTLEConnection::onFindInformation(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+void
+BTLEConnection::onFindInformation(uint8_t status, void* data, Gatt::AttributeList& list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  return cd->conn->handleFindInformation(status, cd->startHandle, cd->endHandle, buf, len, cd, error);
+  cd->conn->handleFindInformation(status, list, cd, error);
 }
 
-bool
-BTLEConnection::handleFindInformation(uint8_t status, uint16_t startHandle,
-  uint16_t endHandle, uint8_t* buf, int len, struct callbackData* cd, const char* error)
+void
+BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
+    sendFindInfoError(cd, status, error);
   } else if (status == 0) {
     // Create the response object
-    if (findInfoResponse.IsEmpty())
-      findInfoResponse = Persistent<Object>::New(Object::New());
+    Local<Object> response = Object::New();
 
-    // Parse the data
-    uint8_t* ptr = &buf[1];
-    uint16_t handle = 0;
-    parseFindInfo(ptr, handle, buf, len);
-
-    // If we've got more data to retrieve, make another request
-    if (handle < endHandle) {
-      startHandle = handle+1;
-      gatt->findInformation(startHandle, endHandle, onFindInformation, cd);
-      // Signal we're not done
-      return false;
-    } else {
-      // We're done
-      sendFindInformation(cd);
+    char buffer[128];
+    Gatt::AttributeList::iterator iter = list.begin();
+    while (iter != list.end()) {
+      Local<Integer> handleLocal = Integer::New(iter->handle);
+      bt_uuid_to_string(&iter->uuid, buffer, sizeof(buffer));
+      Local<String> uuidString = String::New(buffer);
+      response->Set(handleLocal, uuidString);
+      ++iter;
     }
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    const int argc = 2;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), response };
+    callback->Call(self,  argc, argv);
+    delete cd;
   } else {
-    // Attribute Not Found means we're done getting data
-    if (status == ATT_ECODE_ATTR_NOT_FOUND && !findInfoResponse.IsEmpty()) {
-      sendFindInformation(cd);
-    } else {
-      sendFindInfoError(cd, status, error);
-    }
+    sendFindInfoError(cd, status, error);
   }
-
-  // We're done
-  return true;
 }
 
 // Read attribute callback

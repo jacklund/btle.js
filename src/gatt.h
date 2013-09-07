@@ -4,6 +4,7 @@
 #include <node.h>
 #include <pthread.h>
 #include <map>
+#include <vector>
 #include <bluetooth/uuid.h>
 
 #include "connection.h"
@@ -16,8 +17,20 @@
  */
 class Gatt {
 public:
+  // Some useful typedefs
+  typedef uint8_t opcode_t;
+  typedef uint16_t handle_t;
+
+  struct Attribute {
+    handle_t handle;
+    bt_uuid_t uuid;
+  };
+
+  typedef std::vector<struct Attribute> AttributeList;
+
   typedef void (*errorCallback)(void* data, const char* error);
   typedef bool (*readCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  typedef void (*attributeListCallback)(uint8_t status, void* data, AttributeList& list, const char* error);
 
   // Convert a device error code to a human-readable message
   static const char* getErrorString(uint8_t errorCode);
@@ -30,7 +43,7 @@ public:
   virtual ~Gatt();
 
   // Find information
-  void findInformation(uint16_t startHandle, uint16_t endHandle, readCallback callback, void* data);
+  void findInformation(uint16_t startHandle, uint16_t endHandle, attributeListCallback callback, void* data);
 
   // Read a bluetooth attribute
   void readAttribute(uint16_t handle, readCallback callback, void* data);
@@ -53,10 +66,6 @@ public:
 private:
   struct readData;
 
-  // Some useful typedefs
-  typedef uint8_t opcode_t;
-  typedef uint16_t handle_t;
-
   static void onRead(void* data, uint8_t* buf, int len, const char* error);
   void handleRead(void* data, uint8_t* buf, int read, const char* error);
 
@@ -76,6 +85,12 @@ private:
   size_t encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
     uint8_t* buffer, size_t buflen);
 
+  void doFindInformation(handle_t startHandle, handle_t endHandle);
+  static bool onFindInfo(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  bool handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error);
+
+  static void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
+
   // Internal data
   Connection* connection;  // Bluetooth connection
 
@@ -85,6 +100,11 @@ private:
 
   // Current outstanding request
   struct readData* currentRequest;
+
+  AttributeList attributeList;
+  attributeListCallback attrListCallback;
+  void* attrListData;
+  handle_t endHandle;
 
   // Map of handle => callback
   typedef std::map<handle_t, readData*> NotificationMap;
