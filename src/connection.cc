@@ -7,11 +7,12 @@
 // Struct for write callbacks
 struct writeData
 {
-  writeData() : connection(NULL), data(NULL), callback(NULL) {}
+  writeData() : connection(NULL), data(NULL), callback(NULL), buffer(NULL) {}
 
   Connection* connection;
   void* data;
   Connection::writeCallback callback;
+  char* buffer;
 };
 
 // Constructor
@@ -77,15 +78,14 @@ void
 Connection::write(uv_buf_t& buffer, writeCallback callback, void* cbData)
 {
   uv_write_t* req = new uv_write_t();
-  if (callback != NULL) {
-    struct writeData* wd = new struct writeData();
-    wd->connection = this;
-    wd->data = cbData;
-    wd->callback = callback;
-    req->data = wd;
-  }
+  struct writeData* wd = new struct writeData();
+  wd->connection = this;
+  wd->data = cbData;
+  wd->callback = callback;
+  wd->buffer = buffer.base;
+  req->data = wd;
 
-  uv_write(req, getStream(), &buffer, 1, callback == NULL ? NULL : onWrite);
+  uv_write(req, getStream(), &buffer, 1, onWrite);
 }
 
 // Struct for close callbacks
@@ -134,6 +134,9 @@ Connection::onWrite(uv_write_t* req, int status)
       wd->callback(wd->data, NULL);
     }
   }
+  delete [] wd->buffer;
+  delete req;
+  delete wd;
 }
 
 //
@@ -165,7 +168,8 @@ Connection::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     }
   }
 
-  delete buf.base;
+  delete [] buf.base;
+  buf.base = NULL;
 }
 
 //
@@ -198,6 +202,7 @@ Connection::onConnect(uv_poll_t* handle, int status, int events)
     uv_read_start((uv_stream_t*) conn->tcp, onAlloc, onRead);
   }
   cd->callback(cd->data, status, events);
+  delete cd;
 }
 
 //
