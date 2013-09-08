@@ -528,6 +528,7 @@ BTLEConnection::onWrite(void* data, const char* error)
       callback->Call(cd->conn->self, argc, argv);
     }
   }
+  delete cd;
 }
 
 // Called when we request a value be made "weak"
