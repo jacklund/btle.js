@@ -53,19 +53,21 @@ bool getSourceAddr(Handle<String> key, Local<Object> options, struct set_opts& o
   return true;
 }
 
-bool setOpts(struct set_opts& opts, Local<Object> options)
+bool setOpts(struct set_opts& opts, Local<String> destination, Local<Object> options)
 {
   memset((void*) &opts, 0, sizeof(opts));
 
   /* Set defaults */
-  opts.type = BT_IO_SCO;
+  opts.type = BT_IO_L2CAP;
   opts.defer = 30;
   opts.master = -1;
   opts.mode = L2CAP_MODE_BASIC;
   opts.flushable = -1;
   opts.priority = 0;
-  opts.src_type = BDADDR_BREDR;
-  opts.dst_type = BDADDR_BREDR;
+  opts.src_type = BDADDR_LE_PUBLIC;
+  opts.dst_type = BDADDR_LE_PUBLIC;
+  opts.cid = ATT_CID;
+  opts.sec_level = BT_SECURITY_LOW;
 
   Handle<String> key = getKey("source");
   if (options->Has(key)) {
@@ -74,15 +76,7 @@ bool setOpts(struct set_opts& opts, Local<Object> options)
 		bacpy(&opts.src, BDADDR_ANY);
   }
 
-  key = getKey("destination");
-  if (options->Has(key)) {
-    Local<Value> value = options->Get(key);
-    if (!value->IsString()) {
-      ThrowException(Exception::TypeError(String::New("Destination option must be a string")));
-      return false;
-    }
-    str2ba(getStringValue(value->ToString()), &opts.dst);
-  }
+  str2ba(getStringValue(destination), &opts.dst);
 
   key = getKey("type");
   if (options->Has(key)) {

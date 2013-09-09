@@ -1,32 +1,20 @@
 var btle = require('./index');
 
-conn = new btle.Connection();
-
-// Register an error callback
-conn.on('error', function(err) {
-  console.error("Connection error: %s", err);
-  conn.close();
-});
-
-// Register a close callback
-conn.on('close', function() {
-  console.log("Got close");
-});
-
-// Our connection options
-connect_opts = {
-  destination: 'BC:6A:29:C3:52:A9',
-  type: btle.BtIOType.BT_IO_L2CAP,
-  sourceType: btle.BtAddrType.BDADDR_LE_PUBLIC,
-  destType: btle.BtAddrType.BDADDR_LE_PUBLIC,
-  securityLevel: btle.BtSecurityLevel.BT_SECURITY_LOW,
-  cid: 4
-}
-
 // Connect
-conn.connect(connect_opts, function(err) {
+btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
   process.on('SIGINT', function() {
     conn.close();
+  });
+
+  // Register an error callback
+  conn.on('error', function(err) {
+    console.error("Connection error: %s", err);
+    conn.close();
+  });
+
+  // Register a close callback
+  conn.on('close', function() {
+    console.log("Got close");
   });
 
   // Listen for notifications

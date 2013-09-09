@@ -6,7 +6,7 @@
 
 void printBuffer(const char* data, size_t len);
 
-bool setOpts(struct set_opts& opts, v8::Local<v8::Object> options);
+bool setOpts(struct set_opts& opts, v8::Local<v8::String> destination, v8::Local<v8::Object> options);
 
 v8::Handle<v8::String> getKey(const char* value);
 

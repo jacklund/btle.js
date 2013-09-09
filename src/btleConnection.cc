@@ -69,32 +69,48 @@ BTLEConnection::Connect(const Arguments& args)
   HandleScope scope;
   struct set_opts opts;
 
-  if (args.Length() < 1) {
+  if (args.Length() < 2) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
   }
 
-  if (!args[0]->IsObject()) {
-    ThrowException(Exception::TypeError(String::New("Options argument must be an object")));
+  if (!args[0]->IsString()) {
+    ThrowException(Exception::TypeError(String::New("Destination object must be a string")));
+    return scope.Close(Undefined());
+  }
+
+  Local<String> destination = Local<String>::Cast(args[0]);
+
+  Local<Object> options;
+  Persistent<Function> callback;
+
+  if (args[1]->IsObject() && !args[1]->IsFunction()) {
+    if (args.Length() < 3) {
+      ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+      return scope.Close(Undefined());
+    }
+    if (!args[2]->IsFunction()) {
+      ThrowException(Exception::TypeError(String::New("Third argument must be a callback")));
+      return scope.Close(Undefined());
+    }
+    options = args[1]->ToObject();
+    callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
+  } else if (args[1]->IsFunction()) {
+    options = Object::New();
+    callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
+  } else {
+      ThrowException(Exception::TypeError(String::New("Second argument must be either a callback or options")));
+      return scope.Close(Undefined());
+  }
+
+  if (!setOpts(opts, destination, options)) {
     return scope.Close(Undefined());
   }
 
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
-  if (args.Length() > 1) {
-    if (!args[1]->IsFunction()) {
-      ThrowException(Exception::TypeError(String::New("Second argument must be a callback")));
-      return scope.Close(Undefined());
-    } else {
-      Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
-      callback.MakeWeak(*callback, weak_cb);
-      conn->connectionCallback = callback;
-    }
-  }
-
-  if (!setOpts(opts, args[0]->ToObject())) {
-    return scope.Close(Undefined());
-  }
+  callback.MakeWeak(*callback, weak_cb);
+  conn->connectionCallback = callback;
 
   conn->connection = new Connection();
   conn->gatt = new Gatt(conn->connection);
@@ -337,20 +353,22 @@ void
 BTLEConnection::emit_error()
 {
     uv_err_t err = uv_last_error(uv_default_loop());
-    const int argc = 2;
+    const int argc = 3;
     Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
     Local<Value> argv[argc] = { String::New("error"),
-                                error };
+                                error,
+                                Local<Value>::New(this->self) };
     MakeCallback(this->self, "emit", argc, argv);
 }
 
 void
 BTLEConnection::emit_error(const char* errorMessage)
 {
-    const int argc = 2;
+    const int argc = 3;
     Local<Value> error = String::New(errorMessage);
     Local<Value> argv[argc] = { String::New("error"),
-                                error };
+                                error,
+                                Local<Value>::New(this->self) };
     MakeCallback(this->self, "emit", argc, argv);
 }
 
@@ -367,14 +385,14 @@ BTLEConnection::handleConnect(int status, int events)
 {
   if (status == 0) {
     if (connectionCallback.IsEmpty()) {
-      // Emit a 'connect' event, with no args
-      const int argc = 1;
-      Local<Value> argv[argc] = { String::New("connect") };
+      // Emit a 'connect' event, with this as sole arg
+      const int argc = 2;
+      Local<Value> argv[argc] = { String::New("connect"), Local<Value>::New(this->self) };
       MakeCallback(self, "emit", argc, argv);
     } else {
       // Call the provided callback
-      const int argc = 1;
-      Local<Value> argv[argc] = { Local<Value>::New(Null()) };
+      const int argc = 2;
+      Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(this->self) };
       connectionCallback->Call(self, argc, argv);
     }
   } else {
@@ -385,9 +403,9 @@ BTLEConnection::handleConnect(int status, int events)
     } else {
       // Call the provided callback with the error
       uv_err_t err = uv_last_error(uv_default_loop());
-      const int argc = 1;
+      const int argc = 2;
       Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
-      Local<Value> argv[argc] = { error };
+      Local<Value> argv[argc] = { error, Local<Value>::New(this->self) };
       connectionCallback->Call(self, argc, argv);
     }
   }
