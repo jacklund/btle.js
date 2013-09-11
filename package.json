@@ -1,0 +1,24 @@
+{
+  "name": "btle.js",
+  "version": "0.1.0",
+  "description": "Native Bluetooth LE Node.js module for Linux",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/jacklund/btle.js.git"
+  },
+  "keywords": [
+    "bluetooth",
+    "bluetooth_le"
+  ],
+  "author": "Jack Lund",
+  "license": "MIT",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/jacklund/btle.js/issues"
+  }
+}
