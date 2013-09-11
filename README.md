@@ -18,6 +18,13 @@ Still to be implemented:
 * Read Blob
 * Listen for Indications
 
+## Installation
+btle.js is available on [npm](https://npmjs.org/package/btle.js). To install it from there, just do:
+
+    $ npm install btle.js
+
+You can also just clone the project.
+
 ## Usage:
 
     var btle = require('btle.js');
