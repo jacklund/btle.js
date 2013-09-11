@@ -15,7 +15,7 @@
     "bluetooth",
     "bluetooth_le"
   ],
-  "author": "Jack Lund",
+  "author": "Jack Lund <jackl@geekheads.net>",
   "license": "MIT",
   "gypfile": true,
   "bugs": {
