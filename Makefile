@@ -1,5 +1,5 @@
 all:
-		CXXFLAGS='-fpermissive -fexceptions' node-gyp --debug configure build
+		CXXFLAGS='-fpermissive -fexceptions' node-gyp configure build
 
 clean:
 		node-gyp clean
