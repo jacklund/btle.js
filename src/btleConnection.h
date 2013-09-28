@@ -22,6 +22,7 @@ public:
   static v8::Handle<v8::Value> New(const v8::Arguments& args);
   static v8::Handle<v8::Value> Connect(const v8::Arguments& args);
   static v8::Handle<v8::Value> FindInformation(const v8::Arguments& args);
+  static v8::Handle<v8::Value> FindByTypeValue(const v8::Arguments& args);
   static v8::Handle<v8::Value> ReadHandle(const v8::Arguments& args);
   static v8::Handle<v8::Value> AddNotificationListener(const v8::Arguments& args);
   static v8::Handle<v8::Value> WriteCommand(const v8::Arguments& args);
@@ -41,16 +42,18 @@ protected:
   static bool onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static void onWrite(void* data, const char* error);
   static void onFindInformation(uint8_t status, void* data, Gatt::AttributeList& list, const char* error);
+  static void onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList& list, const char* error);
   static void onError(void* data, const char* error);
 
   void handleConnect(int status, int events);
   void handleFindInformation(uint8_t status, Gatt::AttributeList& list, struct callbackData* cd, const char* error);
+  void handleFindByType(uint8_t status, Gatt::HandlesInformationList& list, struct callbackData* cd, const char* error);
 
   // Callback called when we tell v8 to make a reference weak
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);
 
-  // Send off the Find Information data to node.js
-  void sendFindInfoError(struct callbackData* cd, uint8_t err, const char* error);
+  // Translate the error code and return an error
+  void sendError(struct callbackData* cd, uint8_t err, const char* error);
 
   const char* createErrorMessage(uint8_t err);
 

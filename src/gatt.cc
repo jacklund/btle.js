@@ -27,7 +27,7 @@ struct Gatt::readData {
   opcode_t request;
   opcode_t expectedResponse;
   void* data;
-  readCallback callback;
+  ReadCallback callback;
 };
 
 // Encode a Bluetooth LE packet
@@ -75,7 +75,8 @@ Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
 }
 
 size_t
-Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid, uint8_t* buffer, size_t buflen)
+Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+  uint8_t* buffer, size_t buflen, const uint8_t* value, size_t vlen)
 {
   // The minimum packet length
 	size_t ret = sizeof(buffer[0]) + sizeof(startHandle) + sizeof(endHandle);
@@ -115,6 +116,11 @@ Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t
     }
   }
 
+  if (value != NULL) {
+    memcpy(&buffer[7], value, vlen);
+    ret += vlen;
+  }
+
   // Return the actual length of the data
 	return ret;
 }
@@ -135,7 +141,7 @@ Gatt::~Gatt()
 }
 
 bool
-Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, readCallback callback) {
+Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, ReadCallback callback) {
   // Set up the callback for the read
   struct readData* rd = new struct readData();
   rd->request = ATT_OP_FIND_INFO_REQ;
@@ -153,7 +159,7 @@ Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, readCal
 // Issue a "Find Information" command
 //
 void
-Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, attributeListCallback callback, void* data)
+Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, this, onFindInfo)) {
     this->attributeList.clear();
@@ -210,6 +216,58 @@ Gatt::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error
 }
 
 //
+// Issue a "Find By Type Value" command
+//
+void
+Gatt::findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+  const uint8_t* value, size_t vlen, HandlesInfoListCallback callback, void* data)
+{
+  if (setCurrentRequest(ATT_OP_FIND_BY_TYPE_REQ, ATT_OP_FIND_BY_TYPE_RESP, this, onFindByType)) {
+    this->handlesInformationList.clear();
+    this->handlesInfoListCallback = callback;
+    this->handlesInfoData = data;
+    this->endHandle = endHandle;
+
+    doFindByType(startHandle, endHandle, uuid, value, vlen);
+  } else {
+    // TODO: return error saying we already have an outstanding request
+    fprintf(stderr, "Already have request pending\n");
+  }
+}
+
+void
+Gatt::doFindByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid,
+  const uint8_t* value, size_t vlen)
+{
+  // Write to the device
+  uv_buf_t buf = connection->getBuffer();
+  size_t len = encode(ATT_OP_FIND_BY_TYPE_REQ, startHandle, endHandle, uuid,
+    (uint8_t*) buf.base, buf.len, value, vlen);
+  buf.len = len;
+  connection->write(buf);
+}
+
+bool
+Gatt::onFindByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+{
+  Gatt* gatt = (Gatt*) data;
+  return gatt->handleFindByType(status, buf, len, error);
+}
+
+bool
+Gatt::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
+{
+  if (error) {
+    this->handlesInfoListCallback(status, handlesInfoData, handlesInformationList, error);
+    return true;
+  } else {
+    parseHandlesInformationList(this->handlesInformationList, buf, len);
+    this->handlesInfoListCallback(status, handlesInfoData, handlesInformationList, error);
+    return true;
+  }
+}
+
+//
 // Read an attribute using the handle
 // Arguments:
 //  handle   - The handle
@@ -217,7 +275,7 @@ Gatt::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error
 //  data     - Optional callback data
 //
 void
-Gatt::readAttribute(uint16_t handle, readCallback callback, void* data)
+Gatt::readAttribute(uint16_t handle, ReadCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_READ_REQ, ATT_OP_READ_RESP, data, callback)) {
     // Write to the device
@@ -237,7 +295,7 @@ Gatt::readAttribute(uint16_t handle, readCallback callback, void* data)
 //  data     - Optional callback data
 //
 void
-Gatt::listenForNotifications(uint16_t handle, readCallback callback, void* data)
+Gatt::listenForNotifications(uint16_t handle, ReadCallback callback, void* data)
 {
   // Set up the read callback
   struct readData* rd = new struct readData();
@@ -259,7 +317,7 @@ Gatt::listenForNotifications(uint16_t handle, readCallback callback, void* data)
 //  cbData   - Optional callback data
 //
 void
-Gatt::writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::writeCallback callback, void* cbData)
+Gatt::writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback, void* cbData)
 {
   // Do the write
   uv_buf_t buf = connection->getBuffer();
@@ -278,7 +336,7 @@ Gatt::writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connecti
 //  cbData   - Optional callback data
 //
 void
-Gatt::writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connection::writeCallback callback, void* cbData)
+Gatt::writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback, void* cbData)
 {
   // Perform the write
   uv_buf_t buf = connection->getBuffer();
@@ -389,6 +447,20 @@ Gatt::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
       ptr += sizeof(uint128_t);
     }
     list.push_back(attribute);
+  }
+}
+
+void
+Gatt::parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len)
+{
+  uint8_t* ptr = &buf[0];
+  struct HandlesInformation handles;
+  while (ptr - buf < len) {
+    handles.foundHandle = att_get_u16(ptr);
+    ptr += sizeof(handle_t);
+    handles.groupEndHandle = att_get_u16(ptr);
+    ptr += sizeof(handle_t);
+    list.push_back(handles);
   }
 }
 

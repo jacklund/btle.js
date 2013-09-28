@@ -10,30 +10,30 @@
 class Connection {
 public:
   // Callback types
-  typedef void (*connectCallback)(void* data, int status, int events);
-  typedef void (*closeCallback)(void* data);
-  typedef void (*errorCallback)(void* data, const char* error);
-  typedef void (*readCallback)(void* data, uint8_t* buf, int len, const char* error);
-  typedef void (*writeCallback)(void* data, const char* error);
+  typedef void (*ConnectCallback)(void* data, int status, int events);
+  typedef void (*CloseCallback)(void* data);
+  typedef void (*ErrorCallback)(void* data, const char* error);
+  typedef void (*ReadCallback)(void* data, uint8_t* buf, int len, const char* error);
+  typedef void (*WriteCallback)(void* data, const char* error);
 
   // Constructor/Destructor
   Connection();
   virtual ~Connection();
 
   // Connect to a bluetooth device
-  void connect(struct set_opts& opts, connectCallback connect, void* data);
+  void connect(struct set_opts& opts, ConnectCallback connect, void* data);
 
   // Register callbacks
-  void registerReadCallback(readCallback callback, void* cbData);
+  void registerReadCallback(ReadCallback callback, void* cbData);
 
   // Construct a buffer of the correct size to talk to the device
   uv_buf_t getBuffer();
 
   // Write to the device
-  void write(uv_buf_t& buffer, writeCallback callback = NULL, void* cbData = NULL);
+  void write(uv_buf_t& buffer, WriteCallback callback = NULL, void* cbData = NULL);
 
   // Close the connection
-  void close(closeCallback cb, void* data);
+  void close(CloseCallback cb, void* data);
 
 private:
   // Internal callbacks
@@ -52,7 +52,7 @@ private:
   uint16_t imtu;           // Incoming MTU size
   uint16_t cid;            // CID value for this connection
 
-  readCallback readCb;
+  ReadCallback readCb;
   void* readData;
 };
 

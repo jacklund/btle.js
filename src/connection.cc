@@ -11,7 +11,7 @@ struct writeData
 
   Connection* connection;
   void* data;
-  Connection::writeCallback callback;
+  Connection::WriteCallback callback;
   char* buffer;
 };
 
@@ -34,7 +34,7 @@ struct connectData
 {
   connectData() : conn(NULL), callback(NULL), data(NULL) {}
   Connection* conn;
-  Connection::connectCallback callback;
+  Connection::ConnectCallback callback;
   void* data;
 };
 
@@ -46,7 +46,7 @@ struct connectData
 //  data    - Optional callback data
 //
 void
-Connection::connect(struct set_opts& opts, connectCallback connect, void* data)
+Connection::connect(struct set_opts& opts, ConnectCallback connect, void* data)
 {
   this->sock = bt_io_connect(&opts);
   if (this->sock == -1)
@@ -67,7 +67,7 @@ Connection::connect(struct set_opts& opts, connectCallback connect, void* data)
 
 // Register a read callback
 void
-Connection::registerReadCallback(readCallback callback, void* cbData)
+Connection::registerReadCallback(ReadCallback callback, void* cbData)
 {
   this->readCb = callback;
   this->readData = cbData;
@@ -75,7 +75,7 @@ Connection::registerReadCallback(readCallback callback, void* cbData)
 
 // Write to the device
 void
-Connection::write(uv_buf_t& buffer, writeCallback callback, void* cbData)
+Connection::write(uv_buf_t& buffer, WriteCallback callback, void* cbData)
 {
   uv_write_t* req = new uv_write_t();
   struct writeData* wd = new struct writeData();
@@ -92,7 +92,7 @@ Connection::write(uv_buf_t& buffer, writeCallback callback, void* cbData)
 struct closeData
 {
   closeData() : callback(NULL), data(NULL) {}
-  Connection::closeCallback callback;
+  Connection::CloseCallback callback;
   void* data;
 };
 
@@ -103,7 +103,7 @@ struct closeData
 //  data - Optional callback data
 //
 void
-Connection::close(closeCallback cb, void* data)
+Connection::close(CloseCallback cb, void* data)
 {
   if (this->tcp)
   {

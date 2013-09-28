@@ -25,12 +25,20 @@ public:
     handle_t handle;
     bt_uuid_t uuid;
   };
-
+  
   typedef std::vector<struct Attribute> AttributeList;
 
-  typedef void (*errorCallback)(void* data, const char* error);
-  typedef bool (*readCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
-  typedef void (*attributeListCallback)(uint8_t status, void* data, AttributeList& list, const char* error);
+  struct HandlesInformation {
+    handle_t foundHandle;
+    handle_t groupEndHandle;
+  };
+
+  typedef std::vector<struct HandlesInformation> HandlesInformationList;
+
+  typedef void (*ErrorCallback)(void* data, const char* error);
+  typedef bool (*ReadCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  typedef void (*AttributeListCallback)(uint8_t status, void* data, AttributeList& list, const char* error);
+  typedef void (*HandlesInfoListCallback)(uint8_t status, void* data, HandlesInformationList& list, const char* error);
 
   // Convert a device error code to a human-readable message
   static const char* getErrorString(uint8_t errorCode);
@@ -43,22 +51,26 @@ public:
   virtual ~Gatt();
 
   // Find information
-  void findInformation(uint16_t startHandle, uint16_t endHandle, attributeListCallback callback, void* data);
+  void findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data);
+
+  // Find by Type Value
+  void findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid, 
+    const uint8_t* value, size_t vlen, HandlesInfoListCallback callback, void* data);
 
   // Read a bluetooth attribute
-  void readAttribute(uint16_t handle, readCallback callback, void* data);
+  void readAttribute(uint16_t handle, ReadCallback callback, void* data);
 
   // Write data to an attribute without expecting a response
-  void writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::writeCallback callback=NULL, void* cbData=NULL);
+  void writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback=NULL, void* cbData=NULL);
 
   // Write data to an attribute, expecting a response
-  void writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connection::writeCallback callback=NULL, void* cbData=NULL);
+  void writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback=NULL, void* cbData=NULL);
 
   // Listen for incoming notifications from the device
-  void listenForNotifications(uint16_t handle, readCallback callback, void* data);
+  void listenForNotifications(uint16_t handle, ReadCallback callback, void* data);
 
   // Handle errors
-  void onError(errorCallback handler, void* data) {
+  void onError(ErrorCallback handler, void* data) {
     errorHandler = handler;
     errorData = data;
   }
@@ -71,7 +83,7 @@ private:
 
   // Utilities
   // Set the current request atomically
-  bool setCurrentRequest(opcode_t request, opcode_t response, void* data, readCallback callback);
+  bool setCurrentRequest(opcode_t request, opcode_t response, void* data, ReadCallback callback);
 
   // Make the callback for the current request
   void callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error);
@@ -83,28 +95,39 @@ private:
   size_t encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
     const uint8_t* value = NULL, size_t vlen = 0);
   size_t encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
-    uint8_t* buffer, size_t buflen);
+    uint8_t* buffer, size_t buflen, const uint8_t* value = NULL, size_t vlen = 0);
 
   void doFindInformation(handle_t startHandle, handle_t endHandle);
   static bool onFindInfo(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   bool handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error);
 
+  void doFindByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid,
+    const uint8_t* value, size_t vlen);
+  static bool onFindByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  bool handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error);
+
+
   static void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
+  static void parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len);
 
   // Internal data
   Connection* connection;  // Bluetooth connection
 
   // Error handler
-  errorCallback errorHandler;
+  ErrorCallback errorHandler;
   void* errorData;
 
   // Current outstanding request
   struct readData* currentRequest;
 
   AttributeList attributeList;
-  attributeListCallback attrListCallback;
+  AttributeListCallback attrListCallback;
   void* attrListData;
   handle_t endHandle;
+
+  HandlesInformationList handlesInformationList;
+  HandlesInfoListCallback handlesInfoListCallback;
+  void* handlesInfoData;
 
   // Map of handle => callback
   typedef std::map<handle_t, readData*> NotificationMap;

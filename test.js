@@ -17,6 +17,16 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     console.log("Got close");
   });
 
+  /*
+  conn.findInformation(0x0001, 0xffff, function(err, object) {
+    if (err) {
+      console.log("Got error: " + err);
+    } else {
+      console.log(object);
+    }
+  });
+  */
+
   // Listen for notifications
   conn.addNotificationListener(0x25, function(err, buffer) {
     if (err) {

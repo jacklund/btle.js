@@ -169,6 +169,65 @@ BTLEConnection::FindInformation(const Arguments& args)
   return scope.Close(Undefined());
 }
 
+// Send a Find By Type Value request
+Handle<Value>
+BTLEConnection::FindByTypeValue(const Arguments& args)
+{
+  HandleScope scope;
+
+  if (args.Length() < 5) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("First argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("Second argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[2]->IsString()) {
+    ThrowException(Exception::TypeError(String::New("Third argument must be a string")));
+    return scope.Close(Undefined());
+  }
+
+  if (!Buffer::HasInstance(args[3])) {
+    ThrowException(Exception::TypeError(String::New("Fourth argument must be a buffer")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[4]->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New("Fifth argument must be a callback")));
+    return scope.Close(Undefined());
+  }
+
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
+  callback.MakeWeak(*callback, weak_cb);
+
+  int startHandle, endHandle;
+  getIntValue(args[0]->ToNumber(), startHandle);
+  getIntValue(args[1]->ToNumber(), endHandle);
+
+  bt_uuid_t* uuid = NULL;
+  bt_string_to_uuid(uuid, getStringValue(args[2]->ToString()));
+  
+  struct callbackData* cd = new struct callbackData();
+  cd->data = *callback;
+  cd->conn = conn;
+  cd->startHandle = startHandle;
+  cd->endHandle = endHandle;
+
+  conn->gatt->findByTypeValue(startHandle, endHandle, uuid,
+      (const uint8_t*) Buffer::Data(args[3]), Buffer::Length(args[3]), onFindByType, cd);
+  return scope.Close(Undefined());
+}
+
 // Read an attribute
 Handle<Value>
 BTLEConnection::ReadHandle(const Arguments& args)
@@ -430,7 +489,7 @@ BTLEConnection::createErrorMessage(uint8_t err)
 }
 
 void
-BTLEConnection::sendFindInfoError(struct callbackData* cd, uint8_t err, const char* error)
+BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* error)
 {
     Persistent<Function> callback = static_cast<Function*>(cd->data);
     const int argc = 2;
@@ -452,7 +511,7 @@ void
 BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
-    sendFindInfoError(cd, status, error);
+    sendError(cd, status, error);
   } else if (status == 0) {
     // Create the response object
     Local<Object> response = Object::New();
@@ -472,7 +531,44 @@ BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list,
     callback->Call(self,  argc, argv);
     delete cd;
   } else {
-    sendFindInfoError(cd, status, error);
+    sendError(cd, status, error);
+  }
+}
+
+// FindByTypeValue callback
+
+void
+BTLEConnection::onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList& list, const char* error)
+{
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  cd->conn->handleFindByType(status, list, cd, error);
+}
+
+void
+BTLEConnection::handleFindByType(uint8_t status, Gatt::HandlesInformationList& list, struct callbackData* cd, const char* error)
+{
+  if (error) {
+    sendError(cd, status, error);
+  } else if (status == 0) {
+    // Create the response object
+    Local<Array> response = Array::New(list.size());
+
+    size_t index = 0;
+    Gatt::HandlesInformationList::iterator iter = list.begin();
+    while (iter != list.end()) {
+      Local<Object> handlesInfo = Object::New();
+      handlesInfo->Set(String::NewSymbol("foundHandle"), Integer::New(iter->foundHandle));
+      handlesInfo->Set(String::NewSymbol("groupEndHandle"), Integer::New(iter->groupEndHandle));
+      response->Set(index++, handlesInfo);
+      ++iter;
+    }
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    const int argc = 2;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), response };
+    callback->Call(self,  argc, argv);
+    delete cd;
+  } else {
+    sendError(cd, status, error);
   }
 }
 
