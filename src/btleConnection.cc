@@ -501,10 +501,11 @@ BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* erro
 
 // Find Information callback
 void
-BTLEConnection::onFindInformation(uint8_t status, void* data, Gatt::AttributeList& list, const char* error)
+BTLEConnection::onFindInformation(uint8_t status, void* data, Gatt::AttributeList* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  cd->conn->handleFindInformation(status, list, cd, error);
+  cd->conn->handleFindInformation(status, *list, cd, error);
+  delete list;
 }
 
 void
@@ -538,10 +539,11 @@ BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list,
 // FindByTypeValue callback
 
 void
-BTLEConnection::onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList& list, const char* error)
+BTLEConnection::onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  cd->conn->handleFindByType(status, list, cd, error);
+  cd->conn->handleFindByType(status, *list, cd, error);
+  delete list;
 }
 
 void
@@ -691,6 +693,7 @@ extern "C" void init(Handle<Object> exports)
   t->SetClassName(String::New("BTLEConnection"));
   NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
   NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
+  NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", BTLEConnection::FindByTypeValue);
   NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
   NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
   NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);

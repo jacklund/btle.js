@@ -37,8 +37,8 @@ public:
 
   typedef void (*ErrorCallback)(void* data, const char* error);
   typedef bool (*ReadCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
-  typedef void (*AttributeListCallback)(uint8_t status, void* data, AttributeList& list, const char* error);
-  typedef void (*HandlesInfoListCallback)(uint8_t status, void* data, HandlesInformationList& list, const char* error);
+  typedef void (*AttributeListCallback)(uint8_t status, void* data, AttributeList* list, const char* error);
+  typedef void (*HandlesInfoListCallback)(uint8_t status, void* data, HandlesInformationList* list, const char* error);
 
   // Convert a device error code to a human-readable message
   static const char* getErrorString(uint8_t errorCode);
@@ -120,12 +120,12 @@ private:
   // Current outstanding request
   struct readData* currentRequest;
 
-  AttributeList attributeList;
+  AttributeList* attributeList;
   AttributeListCallback attrListCallback;
   void* attrListData;
   handle_t endHandle;
 
-  HandlesInformationList handlesInformationList;
+  HandlesInformationList* handlesInformationList;
   HandlesInfoListCallback handlesInfoListCallback;
   void* handlesInfoData;
 

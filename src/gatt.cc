@@ -128,7 +128,7 @@ Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t
 // Constructor
 Gatt::Gatt(Connection* conn)
   : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
-    attrListData(NULL), endHandle(0)
+    attributeList(NULL), attrListData(NULL), endHandle(0), handlesInformationList(NULL), handlesInfoData(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&notificationMapLock, NULL);
@@ -162,15 +162,14 @@ void
 Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, this, onFindInfo)) {
-    this->attributeList.clear();
+    this->attributeList = new AttributeList();
     this->attrListCallback = callback;
     this->attrListData = data;
     this->endHandle = endHandle;
 
     doFindInformation(startHandle, endHandle);
   } else {
-    // TODO: return error saying we already have an outstanding request
-    fprintf(stderr, "Already have request pending\n");
+    callback(0, data, new AttributeList(), "Request already pending");
   }
 }
 
@@ -194,20 +193,21 @@ Gatt::onFindInfo(uint8_t status, void* data, uint8_t* buf, int len, const char* 
 bool
 Gatt::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error)
 {
-  if (error) {
-    this->attrListCallback(status, this->attrListData, this->attributeList, error);
-    return true;
-  } else if (status == 0) {
-    parseAttributeList(this->attributeList, buf, len);
-    if (this->attributeList.back().handle < endHandle) {
-      doFindInformation(this->attributeList.back().handle+1, endHandle);
+  if (status == 0) {
+    parseAttributeList(*attributeList, buf, len);
+    if (attributeList->back().handle < endHandle) {
+      doFindInformation(this->attributeList->back().handle+1, endHandle);
       return false;
     } else {
       this->attrListCallback(status, this->attrListData, this->attributeList, error);
       return true;
     }
   } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
-    this->attrListCallback(0, this->attrListData, this->attributeList, error);
+    // Note: Need to null out error string
+    this->attrListCallback(0, this->attrListData, this->attributeList, NULL);
+    return true;
+  } else if (error) {
+    this->attrListCallback(status, this->attrListData, this->attributeList, error);
     return true;
   } else {
     this->attrListCallback(status, this->attrListData, this->attributeList, error);
@@ -223,15 +223,14 @@ Gatt::findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
   const uint8_t* value, size_t vlen, HandlesInfoListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_FIND_BY_TYPE_REQ, ATT_OP_FIND_BY_TYPE_RESP, this, onFindByType)) {
-    this->handlesInformationList.clear();
+    this->handlesInformationList = new HandlesInformationList();
     this->handlesInfoListCallback = callback;
     this->handlesInfoData = data;
     this->endHandle = endHandle;
 
     doFindByType(startHandle, endHandle, uuid, value, vlen);
   } else {
-    // TODO: return error saying we already have an outstanding request
-    fprintf(stderr, "Already have request pending\n");
+    callback(0, data, new HandlesInformationList(), "Request already pending");
   }
 }
 
@@ -258,11 +257,11 @@ bool
 Gatt::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
 {
   if (error) {
-    this->handlesInfoListCallback(status, handlesInfoData, handlesInformationList, error);
+    this->handlesInfoListCallback(status, this->handlesInfoData, this->handlesInformationList, error);
     return true;
   } else {
-    parseHandlesInformationList(this->handlesInformationList, buf, len);
-    this->handlesInfoListCallback(status, handlesInfoData, handlesInformationList, error);
+    parseHandlesInformationList(*handlesInformationList, buf, len);
+    this->handlesInfoListCallback(status, this->handlesInfoData, this->handlesInformationList, error);
     return true;
   }
 }
@@ -284,6 +283,7 @@ Gatt::readAttribute(uint16_t handle, ReadCallback callback, void* data)
     buf.len = len;
     connection->write(buf);
   } else {
+    callback(0, data, NULL, 0, "Request already pending");
   }
 }
 
@@ -365,6 +365,7 @@ Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
   if (error) {
     callbackCurrentRequest(0, NULL, 0, error);
   } else {
+    char buffer[1024];
     uint8_t opcode = buf[0];
     struct readData* rd = NULL;
     handle_t handle;
@@ -374,19 +375,18 @@ Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
         {
           uint8_t request = *(uint8_t*) &buf[1];
           uint8_t errorCode = *(uint8_t*) &buf[4];
+          const char* message = getErrorString(errorCode);
+          if (message != NULL) {
+            sprintf(buffer, "Error on %s for handle 0x%02X: %s",
+              getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
+          } else {
+            sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
+              getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
+          }
           if (currentRequest != NULL && currentRequest->request == request) {
-            callbackCurrentRequest(errorCode, NULL, 0, NULL);
+            callbackCurrentRequest(errorCode, NULL, 0, buffer);
           }
           else if (errorHandler != NULL) {
-            const char* message = getErrorString(errorCode);
-            char buffer[1024];
-            if (message != NULL) {
-              sprintf(buffer, "Error on %s for handle 0x%02X: %s",
-                getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], message);
-            } else {
-              sprintf(buffer, "Error on %s for handle 0x%02X: 0x%02X",
-                getOpcodeName(*(uint8_t*) &buf[1]), *(uint16_t*) &buf[2], errorCode);
-            }
             errorHandler(errorData, buffer);
           }
         }
@@ -408,7 +408,6 @@ Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
           }
         } else {
           if (errorHandler != NULL) {
-            char buffer[1024];
             sprintf(buffer, "Got unexpected notification for handle %x", handle);
             errorHandler(errorData, buffer);
           }
@@ -416,13 +415,12 @@ Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
         break;
 
       default:
+        sprintf(buffer, "Got unexpected data with opcode %x\n", opcode);
         if (currentRequest != NULL) {
           // Note: Remove the opcode before calling the callback
           callbackCurrentRequest(0, (uint8_t*)(&buf[1]), nread-1, NULL);
         } else {
           if (errorHandler != NULL) {
-            char buffer[1024];
-            sprintf(buffer, "Got unexpected data with opcode %x\n", opcode);
             errorHandler(errorData, buffer);
           }
         }

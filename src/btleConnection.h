@@ -41,8 +41,8 @@ protected:
   static bool onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static bool onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static void onWrite(void* data, const char* error);
-  static void onFindInformation(uint8_t status, void* data, Gatt::AttributeList& list, const char* error);
-  static void onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList& list, const char* error);
+  static void onFindInformation(uint8_t status, void* data, Gatt::AttributeList* list, const char* error);
+  static void onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList* list, const char* error);
   static void onError(void* data, const char* error);
 
   void handleConnect(int status, int events);
