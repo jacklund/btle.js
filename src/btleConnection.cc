@@ -207,7 +207,7 @@ BTLEConnection::FindByTypeValue(const Arguments& args)
 
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
-  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[4]));
   callback.MakeWeak(*callback, weak_cb);
 
   int startHandle, endHandle;
@@ -225,6 +225,59 @@ BTLEConnection::FindByTypeValue(const Arguments& args)
 
   conn->gatt->findByTypeValue(startHandle, endHandle, uuid,
       (const uint8_t*) Buffer::Data(args[3]), Buffer::Length(args[3]), onFindByType, cd);
+  return scope.Close(Undefined());
+}
+
+// Send a Read By Type request
+Handle<Value>
+BTLEConnection::ReadByType(const Arguments& args)
+{
+  HandleScope scope;
+
+  if (args.Length() < 4) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("First argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("Second argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[2]->IsString()) {
+    ThrowException(Exception::TypeError(String::New("Third argument must be a string")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[3]->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New("Fourth argument must be a callback")));
+    return scope.Close(Undefined());
+  }
+
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[3]));
+  callback.MakeWeak(*callback, weak_cb);
+
+  int startHandle, endHandle;
+  getIntValue(args[0]->ToNumber(), startHandle);
+  getIntValue(args[1]->ToNumber(), endHandle);
+
+  bt_uuid_t* uuid = NULL;
+  bt_string_to_uuid(uuid, getStringValue(args[2]->ToString()));
+  
+  struct callbackData* cd = new struct callbackData();
+  cd->data = *callback;
+  cd->conn = conn;
+  cd->startHandle = startHandle;
+  cd->endHandle = endHandle;
+
+  conn->gatt->readByType(startHandle, endHandle, uuid, onReadByType, cd);
   return scope.Close(Undefined());
 }
 
@@ -574,6 +627,45 @@ BTLEConnection::handleFindByType(uint8_t status, Gatt::HandlesInformationList& l
   }
 }
 
+// ReadByType callback
+
+void
+BTLEConnection::onReadByType(uint8_t status, void* data, Gatt::AttributeDataList* list, const char* error)
+{
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  cd->conn->handleReadByType(status, *list, cd, error);
+  delete list;
+}
+
+void
+BTLEConnection::handleReadByType(uint8_t status, Gatt::AttributeDataList& list, struct callbackData* cd, const char* error)
+{
+  if (error) {
+    sendError(cd, status, error);
+  } else if (status == 0) {
+    // Create the response object
+    Local<Array> response = Array::New(list.size());
+
+    size_t index = 0;
+    Gatt::AttributeDataList::iterator iter = list.begin();
+    while (iter != list.end()) {
+      Local<Object> attributeData = Object::New();
+      attributeData->Set(String::NewSymbol("handle"), Integer::New(iter->handle));
+      Buffer* buffer = Buffer::New((char*) iter->value, iter->length);
+      attributeData->Set(String::NewSymbol("value"), Local<Value>::New(buffer->handle_));
+      response->Set(index++, attributeData);
+      ++iter;
+    }
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    const int argc = 2;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), response };
+    callback->Call(self,  argc, argv);
+    delete cd;
+  } else {
+    sendError(cd, status, error);
+  }
+}
+
 // Read attribute callback
 bool
 BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
@@ -694,6 +786,7 @@ extern "C" void init(Handle<Object> exports)
   NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
   NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
   NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", BTLEConnection::FindByTypeValue);
+  NODE_SET_PROTOTYPE_METHOD(t, "readByType", BTLEConnection::ReadByType);
   NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
   NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
   NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);

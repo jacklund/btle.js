@@ -17,6 +17,8 @@
  */
 class Gatt {
 public:
+  static const size_t MAX_ATTR_VALUE_LENGTH = 253;
+
   // Some useful typedefs
   typedef uint8_t opcode_t;
   typedef uint16_t handle_t;
@@ -35,10 +37,19 @@ public:
 
   typedef std::vector<struct HandlesInformation> HandlesInformationList;
 
+  struct AttributeData {
+    handle_t handle;
+    uint8_t value[MAX_ATTR_VALUE_LENGTH];
+    size_t length;
+  };
+
+  typedef std::vector<struct AttributeData> AttributeDataList;
+
   typedef void (*ErrorCallback)(void* data, const char* error);
   typedef bool (*ReadCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   typedef void (*AttributeListCallback)(uint8_t status, void* data, AttributeList* list, const char* error);
   typedef void (*HandlesInfoListCallback)(uint8_t status, void* data, HandlesInformationList* list, const char* error);
+  typedef void (*AttributeDataListCallback)(uint8_t status, void* data, AttributeDataList* list, const char* error);
 
   // Convert a device error code to a human-readable message
   static const char* getErrorString(uint8_t errorCode);
@@ -56,6 +67,10 @@ public:
   // Find by Type Value
   void findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid, 
     const uint8_t* value, size_t vlen, HandlesInfoListCallback callback, void* data);
+
+  // Read by Type
+  void readByType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+    AttributeDataListCallback callback, void* data);
 
   // Read a bluetooth attribute
   void readAttribute(uint16_t handle, ReadCallback callback, void* data);
@@ -106,9 +121,13 @@ private:
   static bool onFindByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   bool handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error);
 
+  void doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid);
+  static bool onReadByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  bool handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error);
 
   static void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
   static void parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len);
+  static void parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len);
 
   // Internal data
   Connection* connection;  // Bluetooth connection
@@ -128,6 +147,10 @@ private:
   HandlesInformationList* handlesInformationList;
   HandlesInfoListCallback handlesInfoListCallback;
   void* handlesInfoData;
+
+  AttributeDataList* attributeDataList;
+  AttributeDataListCallback attributeDataListCallback;
+  void* attributeData;
 
   // Map of handle => callback
   typedef std::map<handle_t, readData*> NotificationMap;

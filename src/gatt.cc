@@ -128,7 +128,8 @@ Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t
 // Constructor
 Gatt::Gatt(Connection* conn)
   : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
-    attributeList(NULL), attrListData(NULL), endHandle(0), handlesInformationList(NULL), handlesInfoData(NULL)
+    attributeList(NULL), attrListData(NULL), endHandle(0), handlesInformationList(NULL), handlesInfoData(NULL),
+    attributeDataList(NULL), attributeData(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&notificationMapLock, NULL);
@@ -262,6 +263,53 @@ Gatt::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
   } else {
     parseHandlesInformationList(*handlesInformationList, buf, len);
     this->handlesInfoListCallback(status, this->handlesInfoData, this->handlesInformationList, error);
+    return true;
+  }
+}
+
+void
+Gatt::readByType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+    AttributeDataListCallback callback, void* data)
+{
+  if (setCurrentRequest(ATT_OP_READ_BY_TYPE_REQ, ATT_OP_READ_BY_TYPE_RESP, this, onReadByType)) {
+    this->attributeDataList = new AttributeDataList();
+    this->attributeDataListCallback = callback;
+    this->attributeData = data;
+    this->endHandle = endHandle;
+
+    doReadByType(startHandle, endHandle, uuid);
+  } else {
+    callback(0, data, new AttributeDataList(), "Request already pending");
+  }
+}
+
+void
+Gatt::doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
+{
+  // Write to the device
+  uv_buf_t buf = connection->getBuffer();
+  size_t len = encode(ATT_OP_FIND_BY_TYPE_REQ, startHandle, endHandle, uuid,
+    (uint8_t*) buf.base, buf.len);
+  buf.len = len;
+  connection->write(buf);
+}
+
+bool
+Gatt::onReadByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+{
+  Gatt* gatt = (Gatt*) data;
+  return gatt->handleReadByType(status, buf, len, error);
+}
+
+bool
+Gatt::handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error)
+{
+  if (error) {
+    this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
+    return true;
+  } else {
+    parseAttributeDataList(*attributeDataList, buf, len);
+    this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
     return true;
   }
 }
@@ -459,6 +507,21 @@ Gatt::parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, in
     handles.groupEndHandle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
     list.push_back(handles);
+  }
+}
+
+void
+Gatt::parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len)
+{
+  uint8_t* ptr = &buf[0];
+  uint8_t length = *ptr++;
+  struct AttributeData data;
+  while (ptr - buf < len) {
+    data.handle = att_get_u16(ptr);
+    ptr += sizeof(handle_t);
+    memcpy(data.value, ptr, length-2);
+    ptr += length-2;
+    data.length = length-2;
   }
 }
 
