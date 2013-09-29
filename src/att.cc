@@ -322,17 +322,17 @@ Att::handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error)
 //
 void
 Att::readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
-    AttributeDataListCallback callback, void* data)
+    GroupAttributeDataListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_READ_BY_GROUP_REQ, ATT_OP_READ_BY_GROUP_RESP, this, onReadByType)) {
-    this->attributeDataList = new AttributeDataList();
-    this->attributeDataListCallback = callback;
-    this->attributeData = data;
+    this->groupAttributeDataList = new GroupAttributeDataList();
+    this->groupAttributeDataListCallback = callback;
+    this->groupAttributeData = data;
     this->endHandle = endHandle;
 
     doReadByGroupType(startHandle, endHandle, uuid);
   } else {
-    callback(0, data, new AttributeDataList(), "Request already pending");
+    callback(0, data, new GroupAttributeDataList(), "Request already pending");
   }
 }
 
@@ -358,11 +358,11 @@ bool
 Att::handleReadByGroupType(uint8_t status, uint8_t* buf, int len, const char* error)
 {
   if (error) {
-    this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
+    this->groupAttributeDataListCallback(status, this->groupAttributeData, this->groupAttributeDataList, error);
     return true;
   } else {
-    parseAttributeDataList(*attributeDataList, buf, len);
-    this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
+    parseGroupAttributeDataList(*groupAttributeDataList, buf, len);
+    this->groupAttributeDataListCallback(status, this->groupAttributeData, this->groupAttributeDataList, error);
     return true;
   }
 }
@@ -575,6 +575,23 @@ Att::parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len)
     memcpy(data.value, ptr, length-2);
     ptr += length-2;
     data.length = length-2;
+  }
+}
+
+void
+Att::parseGroupAttributeDataList(GroupAttributeDataList& list, uint8_t* buf, int len)
+{
+  uint8_t* ptr = &buf[0];
+  uint8_t length = *ptr++;
+  struct GroupAttributeData data;
+  while (ptr - buf < len) {
+    data.handle = att_get_u16(ptr);
+    ptr += sizeof(handle_t);
+    data.groupEndHandle = att_get_u16(ptr);
+    ptr += sizeof(handle_t);
+    memcpy(data.value, ptr, length-4);
+    ptr += length-4;
+    data.length = length-4;
   }
 }
 

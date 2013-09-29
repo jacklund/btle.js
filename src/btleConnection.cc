@@ -331,7 +331,7 @@ BTLEConnection::ReadByGroupType(const Arguments& args)
   cd->endHandle = endHandle;
 
   // Note: Can re-use onReadByType
-  conn->att->readByGroupType(startHandle, endHandle, uuid, onReadByType, cd);
+  conn->att->readByGroupType(startHandle, endHandle, uuid, onReadByGroupType, cd);
   return scope.Close(Undefined());
 }
 
@@ -705,6 +705,46 @@ BTLEConnection::handleReadByType(uint8_t status, Att::AttributeDataList& list, s
     while (iter != list.end()) {
       Local<Object> attributeData = Object::New();
       attributeData->Set(String::NewSymbol("handle"), Integer::New(iter->handle));
+      Buffer* buffer = Buffer::New((char*) iter->value, iter->length);
+      attributeData->Set(String::NewSymbol("value"), Local<Value>::New(buffer->handle_));
+      response->Set(index++, attributeData);
+      ++iter;
+    }
+    Persistent<Function> callback = static_cast<Function*>(cd->data);
+    const int argc = 2;
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), response };
+    callback->Call(self,  argc, argv);
+    delete cd;
+  } else {
+    sendError(cd, status, error);
+  }
+}
+
+// ReadByGroupType callback
+
+void
+BTLEConnection::onReadByGroupType(uint8_t status, void* data, Att::GroupAttributeDataList* list, const char* error)
+{
+  struct callbackData* cd = static_cast<struct callbackData*>(data);
+  cd->conn->handleReadByGroupType(status, *list, cd, error);
+  delete list;
+}
+
+void
+BTLEConnection::handleReadByGroupType(uint8_t status, Att::GroupAttributeDataList& list, struct callbackData* cd, const char* error)
+{
+  if (error) {
+    sendError(cd, status, error);
+  } else if (status == 0) {
+    // Create the response object
+    Local<Array> response = Array::New(list.size());
+
+    size_t index = 0;
+    Att::GroupAttributeDataList::iterator iter = list.begin();
+    while (iter != list.end()) {
+      Local<Object> attributeData = Object::New();
+      attributeData->Set(String::NewSymbol("handle"), Integer::New(iter->handle));
+      attributeData->Set(String::NewSymbol("groupEndHandle"), Integer::New(iter->groupEndHandle));
       Buffer* buffer = Buffer::New((char*) iter->value, iter->length);
       attributeData->Set(String::NewSymbol("value"), Local<Value>::New(buffer->handle_));
       response->Set(index++, attributeData);

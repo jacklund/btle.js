@@ -45,11 +45,21 @@ public:
 
   typedef std::vector<struct AttributeData> AttributeDataList;
 
+  struct GroupAttributeData {
+    handle_t handle;
+    handle_t groupEndHandle;
+    uint8_t value[MAX_ATTR_VALUE_LENGTH];
+    size_t length;
+  };
+
+  typedef std::vector<struct GroupAttributeData> GroupAttributeDataList;
+
   typedef void (*ErrorCallback)(void* data, const char* error);
   typedef bool (*ReadCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   typedef void (*AttributeListCallback)(uint8_t status, void* data, AttributeList* list, const char* error);
   typedef void (*HandlesInfoListCallback)(uint8_t status, void* data, HandlesInformationList* list, const char* error);
   typedef void (*AttributeDataListCallback)(uint8_t status, void* data, AttributeDataList* list, const char* error);
+  typedef void (*GroupAttributeDataListCallback)(uint8_t status, void* data, GroupAttributeDataList* list, const char* error);
 
   // Convert a device error code to a human-readable message
   static const char* getErrorString(uint8_t errorCode);
@@ -77,7 +87,7 @@ public:
 
   // Read by Group Type
   void readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
-    AttributeDataListCallback callback, void* data);
+    GroupAttributeDataListCallback callback, void* data);
 
   // Write data to an attribute without expecting a response
   void writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback=NULL, void* cbData=NULL);
@@ -136,6 +146,7 @@ private:
   static void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
   static void parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len);
   static void parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len);
+  static void parseGroupAttributeDataList(GroupAttributeDataList& list, uint8_t* buf, int len);
 
   // Internal data
   Connection* connection;  // Bluetooth connection
@@ -159,6 +170,10 @@ private:
   AttributeDataList* attributeDataList;
   AttributeDataListCallback attributeDataListCallback;
   void* attributeData;
+
+  GroupAttributeDataList* groupAttributeDataList;
+  GroupAttributeDataListCallback groupAttributeDataListCallback;
+  void* groupAttributeData;
 
   // Map of handle => callback
   typedef std::map<handle_t, readData*> NotificationMap;
