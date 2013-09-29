@@ -267,6 +267,9 @@ Gatt::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
   }
 }
 
+//
+// Issue a "Read By Type" command
+//
 void
 Gatt::readByType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
     AttributeDataListCallback callback, void* data)
@@ -288,7 +291,7 @@ Gatt::doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
 {
   // Write to the device
   uv_buf_t buf = connection->getBuffer();
-  size_t len = encode(ATT_OP_FIND_BY_TYPE_REQ, startHandle, endHandle, uuid,
+  size_t len = encode(ATT_OP_READ_BY_TYPE_REQ, startHandle, endHandle, uuid,
     (uint8_t*) buf.base, buf.len);
   buf.len = len;
   connection->write(buf);
@@ -303,6 +306,56 @@ Gatt::onReadByType(uint8_t status, void* data, uint8_t* buf, int len, const char
 
 bool
 Gatt::handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error)
+{
+  if (error) {
+    this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
+    return true;
+  } else {
+    parseAttributeDataList(*attributeDataList, buf, len);
+    this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
+    return true;
+  }
+}
+
+//
+// Issue a "Read By Group Type" command
+//
+void
+Gatt::readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+    AttributeDataListCallback callback, void* data)
+{
+  if (setCurrentRequest(ATT_OP_READ_BY_GROUP_REQ, ATT_OP_READ_BY_GROUP_RESP, this, onReadByType)) {
+    this->attributeDataList = new AttributeDataList();
+    this->attributeDataListCallback = callback;
+    this->attributeData = data;
+    this->endHandle = endHandle;
+
+    doReadByGroupType(startHandle, endHandle, uuid);
+  } else {
+    callback(0, data, new AttributeDataList(), "Request already pending");
+  }
+}
+
+void
+Gatt::doReadByGroupType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
+{
+  // Write to the device
+  uv_buf_t buf = connection->getBuffer();
+  size_t len = encode(ATT_OP_READ_BY_GROUP_REQ, startHandle, endHandle, uuid,
+    (uint8_t*) buf.base, buf.len);
+  buf.len = len;
+  connection->write(buf);
+}
+
+bool
+Gatt::onReadByGroupType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+{
+  Gatt* gatt = (Gatt*) data;
+  return gatt->handleReadByGroupType(status, buf, len, error);
+}
+
+bool
+Gatt::handleReadByGroupType(uint8_t status, uint8_t* buf, int len, const char* error)
 {
   if (error) {
     this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);

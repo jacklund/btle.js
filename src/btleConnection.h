@@ -25,6 +25,7 @@ public:
   static v8::Handle<v8::Value> FindByTypeValue(const v8::Arguments& args);
   static v8::Handle<v8::Value> ReadByType(const v8::Arguments& args);
   static v8::Handle<v8::Value> ReadHandle(const v8::Arguments& args);
+  static v8::Handle<v8::Value> ReadByGroupType(const v8::Arguments& args);
   static v8::Handle<v8::Value> AddNotificationListener(const v8::Arguments& args);
   static v8::Handle<v8::Value> WriteCommand(const v8::Arguments& args);
   static v8::Handle<v8::Value> WriteRequest(const v8::Arguments& args);

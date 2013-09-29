@@ -281,6 +281,60 @@ BTLEConnection::ReadByType(const Arguments& args)
   return scope.Close(Undefined());
 }
 
+// Send a Read By Group Type request
+Handle<Value>
+BTLEConnection::ReadByGroupType(const Arguments& args)
+{
+  HandleScope scope;
+
+  if (args.Length() < 4) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("First argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    ThrowException(Exception::TypeError(String::New("Second argument must be a handle number")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[2]->IsString()) {
+    ThrowException(Exception::TypeError(String::New("Third argument must be a string")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[3]->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New("Fourth argument must be a callback")));
+    return scope.Close(Undefined());
+  }
+
+  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+
+  Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[3]));
+  callback.MakeWeak(*callback, weak_cb);
+
+  int startHandle, endHandle;
+  getIntValue(args[0]->ToNumber(), startHandle);
+  getIntValue(args[1]->ToNumber(), endHandle);
+
+  bt_uuid_t* uuid = NULL;
+  bt_string_to_uuid(uuid, getStringValue(args[2]->ToString()));
+  
+  struct callbackData* cd = new struct callbackData();
+  cd->data = *callback;
+  cd->conn = conn;
+  cd->startHandle = startHandle;
+  cd->endHandle = endHandle;
+
+  // Note: Can re-use onReadByType
+  conn->gatt->readByGroupType(startHandle, endHandle, uuid, onReadByType, cd);
+  return scope.Close(Undefined());
+}
+
 // Read an attribute
 Handle<Value>
 BTLEConnection::ReadHandle(const Arguments& args)
@@ -787,6 +841,7 @@ extern "C" void init(Handle<Object> exports)
   NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
   NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", BTLEConnection::FindByTypeValue);
   NODE_SET_PROTOTYPE_METHOD(t, "readByType", BTLEConnection::ReadByType);
+  NODE_SET_PROTOTYPE_METHOD(t, "readByGroupType", BTLEConnection::ReadByGroupType);
   NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
   NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
   NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);

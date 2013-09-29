@@ -75,6 +75,10 @@ public:
   // Read a bluetooth attribute
   void readAttribute(uint16_t handle, ReadCallback callback, void* data);
 
+  // Read by Group Type
+  void readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+    AttributeDataListCallback callback, void* data);
+
   // Write data to an attribute without expecting a response
   void writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback=NULL, void* cbData=NULL);
 
@@ -124,6 +128,10 @@ private:
   void doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid);
   static bool onReadByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   bool handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error);
+
+  void doReadByGroupType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid);
+  static bool onReadByGroupType(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  bool handleReadByGroupType(uint8_t status, uint8_t* buf, int len, const char* error);
 
   static void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
   static void parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len);
