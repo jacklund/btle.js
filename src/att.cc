@@ -1,6 +1,6 @@
 #include <errno.h>
 
-#include "gatt.h"
+#include "att.h"
 #include "btio.h"
 #include "util.h"
 
@@ -21,7 +21,7 @@ private:
 };
 
 // Struct for read callbacks
-struct Gatt::readData {
+struct Att::readData {
   readData() : request(0), expectedResponse(0), data(NULL), callback(NULL) {}
 
   opcode_t request;
@@ -39,7 +39,7 @@ struct Gatt::readData {
 //  value  - the optional value for the operation
 //  vlen   - the length of the value
 size_t
-Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
+Att::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
     const uint8_t* value, size_t vlen)
 {
   // The minimum packet length
@@ -75,7 +75,7 @@ Gatt::encode(uint8_t opcode, uint16_t handle, uint8_t* buffer, size_t buflen,
 }
 
 size_t
-Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+Att::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
   uint8_t* buffer, size_t buflen, const uint8_t* value, size_t vlen)
 {
   // The minimum packet length
@@ -126,7 +126,7 @@ Gatt::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, bt_uuid_t
 }
 
 // Constructor
-Gatt::Gatt(Connection* conn)
+Att::Att(Connection* conn)
   : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
     attributeList(NULL), attrListData(NULL), endHandle(0), handlesInformationList(NULL), handlesInfoData(NULL),
     attributeDataList(NULL), attributeData(NULL)
@@ -136,13 +136,13 @@ Gatt::Gatt(Connection* conn)
 }
 
 // Destructor
-Gatt::~Gatt()
+Att::~Att()
 {
   pthread_mutex_destroy(&notificationMapLock);
 }
 
 bool
-Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, ReadCallback callback) {
+Att::setCurrentRequest(opcode_t request, opcode_t response, void* data, ReadCallback callback) {
   // Set up the callback for the read
   struct readData* rd = new struct readData();
   rd->request = ATT_OP_FIND_INFO_REQ;
@@ -160,7 +160,7 @@ Gatt::setCurrentRequest(opcode_t request, opcode_t response, void* data, ReadCal
 // Issue a "Find Information" command
 //
 void
-Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data)
+Att::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, this, onFindInfo)) {
     this->attributeList = new AttributeList();
@@ -175,7 +175,7 @@ Gatt::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCal
 }
 
 void
-Gatt::doFindInformation(handle_t startHandle, handle_t endHandle)
+Att::doFindInformation(handle_t startHandle, handle_t endHandle)
 {
   // Write to the device
   uv_buf_t buf = connection->getBuffer();
@@ -185,14 +185,14 @@ Gatt::doFindInformation(handle_t startHandle, handle_t endHandle)
 }
 
 bool
-Gatt::onFindInfo(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+Att::onFindInfo(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
-  Gatt* gatt = (Gatt*) data;
-  return gatt->handleFindInfo(status, buf, len, error);
+  Att* att = (Att*) data;
+  return att->handleFindInfo(status, buf, len, error);
 }
 
 bool
-Gatt::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error)
+Att::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error)
 {
   if (status == 0) {
     parseAttributeList(*attributeList, buf, len);
@@ -220,7 +220,7 @@ Gatt::handleFindInfo(uint8_t status, uint8_t* buf, size_t len, const char* error
 // Issue a "Find By Type Value" command
 //
 void
-Gatt::findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+Att::findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
   const uint8_t* value, size_t vlen, HandlesInfoListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_FIND_BY_TYPE_REQ, ATT_OP_FIND_BY_TYPE_RESP, this, onFindByType)) {
@@ -236,7 +236,7 @@ Gatt::findByTypeValue(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
 }
 
 void
-Gatt::doFindByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid,
+Att::doFindByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid,
   const uint8_t* value, size_t vlen)
 {
   // Write to the device
@@ -248,14 +248,14 @@ Gatt::doFindByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid,
 }
 
 bool
-Gatt::onFindByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+Att::onFindByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
-  Gatt* gatt = (Gatt*) data;
-  return gatt->handleFindByType(status, buf, len, error);
+  Att* att = (Att*) data;
+  return att->handleFindByType(status, buf, len, error);
 }
 
 bool
-Gatt::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
+Att::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
 {
   if (error) {
     this->handlesInfoListCallback(status, this->handlesInfoData, this->handlesInformationList, error);
@@ -271,7 +271,7 @@ Gatt::handleFindByType(uint8_t status, uint8_t* buf, int len, const char* error)
 // Issue a "Read By Type" command
 //
 void
-Gatt::readByType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+Att::readByType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
     AttributeDataListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_READ_BY_TYPE_REQ, ATT_OP_READ_BY_TYPE_RESP, this, onReadByType)) {
@@ -287,7 +287,7 @@ Gatt::readByType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
 }
 
 void
-Gatt::doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
+Att::doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
 {
   // Write to the device
   uv_buf_t buf = connection->getBuffer();
@@ -298,14 +298,14 @@ Gatt::doReadByType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
 }
 
 bool
-Gatt::onReadByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+Att::onReadByType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
-  Gatt* gatt = (Gatt*) data;
-  return gatt->handleReadByType(status, buf, len, error);
+  Att* att = (Att*) data;
+  return att->handleReadByType(status, buf, len, error);
 }
 
 bool
-Gatt::handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error)
+Att::handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error)
 {
   if (error) {
     this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
@@ -321,7 +321,7 @@ Gatt::handleReadByType(uint8_t status, uint8_t* buf, int len, const char* error)
 // Issue a "Read By Group Type" command
 //
 void
-Gatt::readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
+Att::readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
     AttributeDataListCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_READ_BY_GROUP_REQ, ATT_OP_READ_BY_GROUP_RESP, this, onReadByType)) {
@@ -337,7 +337,7 @@ Gatt::readByGroupType(uint16_t startHandle, uint16_t endHandle, bt_uuid_t* uuid,
 }
 
 void
-Gatt::doReadByGroupType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
+Att::doReadByGroupType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uuid)
 {
   // Write to the device
   uv_buf_t buf = connection->getBuffer();
@@ -348,14 +348,14 @@ Gatt::doReadByGroupType(handle_t startHandle, handle_t endHandle, bt_uuid_t* uui
 }
 
 bool
-Gatt::onReadByGroupType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+Att::onReadByGroupType(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
-  Gatt* gatt = (Gatt*) data;
-  return gatt->handleReadByGroupType(status, buf, len, error);
+  Att* att = (Att*) data;
+  return att->handleReadByGroupType(status, buf, len, error);
 }
 
 bool
-Gatt::handleReadByGroupType(uint8_t status, uint8_t* buf, int len, const char* error)
+Att::handleReadByGroupType(uint8_t status, uint8_t* buf, int len, const char* error)
 {
   if (error) {
     this->attributeDataListCallback(status, this->attributeData, this->attributeDataList, error);
@@ -375,7 +375,7 @@ Gatt::handleReadByGroupType(uint8_t status, uint8_t* buf, int len, const char* e
 //  data     - Optional callback data
 //
 void
-Gatt::readAttribute(uint16_t handle, ReadCallback callback, void* data)
+Att::readAttribute(uint16_t handle, ReadCallback callback, void* data)
 {
   if (setCurrentRequest(ATT_OP_READ_REQ, ATT_OP_READ_RESP, data, callback)) {
     // Write to the device
@@ -396,7 +396,7 @@ Gatt::readAttribute(uint16_t handle, ReadCallback callback, void* data)
 //  data     - Optional callback data
 //
 void
-Gatt::listenForNotifications(uint16_t handle, ReadCallback callback, void* data)
+Att::listenForNotifications(uint16_t handle, ReadCallback callback, void* data)
 {
   // Set up the read callback
   struct readData* rd = new struct readData();
@@ -418,7 +418,7 @@ Gatt::listenForNotifications(uint16_t handle, ReadCallback callback, void* data)
 //  cbData   - Optional callback data
 //
 void
-Gatt::writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback, void* cbData)
+Att::writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback, void* cbData)
 {
   // Do the write
   uv_buf_t buf = connection->getBuffer();
@@ -437,7 +437,7 @@ Gatt::writeCommand(uint16_t handle, const uint8_t* data, size_t length, Connecti
 //  cbData   - Optional callback data
 //
 void
-Gatt::writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback, void* cbData)
+Att::writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connection::WriteCallback callback, void* cbData)
 {
   // Perform the write
   uv_buf_t buf = connection->getBuffer();
@@ -454,14 +454,14 @@ Gatt::writeRequest(uint16_t handle, const uint8_t* data, size_t length, Connecti
 // Read callback
 //
 void
-Gatt::onRead(void* data, uint8_t* buf, int nread, const char* error)
+Att::onRead(void* data, uint8_t* buf, int nread, const char* error)
 {
-  Gatt* gatt = (Gatt*) data;
-  gatt->handleRead(data, buf, nread, error);
+  Att* att = (Att*) data;
+  att->handleRead(data, buf, nread, error);
 }
 
 void
-Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
+Att::handleRead(void* data, uint8_t* buf, int nread, const char* error)
 {
   if (error) {
     callbackCurrentRequest(0, NULL, 0, error);
@@ -530,7 +530,7 @@ Gatt::handleRead(void* data, uint8_t* buf, int nread, const char* error)
 }
 
 void
-Gatt::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
+Att::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
 {
   uint8_t format = buf[0];
   uint8_t* ptr = &buf[1];
@@ -550,7 +550,7 @@ Gatt::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
 }
 
 void
-Gatt::parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len)
+Att::parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, int len)
 {
   uint8_t* ptr = &buf[0];
   struct HandlesInformation handles;
@@ -564,7 +564,7 @@ Gatt::parseHandlesInformationList(HandlesInformationList& list, uint8_t* buf, in
 }
 
 void
-Gatt::parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len)
+Att::parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len)
 {
   uint8_t* ptr = &buf[0];
   uint8_t length = *ptr++;
@@ -583,7 +583,7 @@ Gatt::parseAttributeDataList(AttributeDataList& list, uint8_t* buf, int len)
 //
 
 void
-Gatt::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error)
+Att::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error)
 {
   if (currentRequest->callback != NULL) {
     bool remove = currentRequest->callback(status, currentRequest->data, buffer, len, error);
@@ -592,14 +592,14 @@ Gatt::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const 
 }
 
 void
-Gatt::removeCurrentRequest()
+Att::removeCurrentRequest()
 {
   struct readData* rd = __sync_lock_test_and_set(&currentRequest, NULL);
   delete rd;
 }
 
 const char*
-Gatt::getErrorString(uint8_t errorCode)
+Att::getErrorString(uint8_t errorCode)
 {
   switch (errorCode) {
     case ATT_ECODE_INVALID_HANDLE:
@@ -642,7 +642,7 @@ Gatt::getErrorString(uint8_t errorCode)
 }
 
 const char*
-Gatt::getOpcodeName(uint8_t opcode)
+Att::getOpcodeName(uint8_t opcode)
 {
   switch (opcode) {
     case ATT_OP_ERROR:

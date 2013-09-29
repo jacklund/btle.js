@@ -1,5 +1,5 @@
-#ifndef GATT_H
-#define GATT_H
+#ifndef ATT_H
+#define ATT_H
 
 #include <node.h>
 #include <pthread.h>
@@ -15,7 +15,7 @@
  * into a separate class which is used by this class (so other BLE protocol classes
  * can use the same connection).
  */
-class Gatt {
+class Att {
 public:
   static const size_t MAX_ATTR_VALUE_LENGTH = 253;
 
@@ -58,8 +58,8 @@ public:
   static const char* getOpcodeName(uint8_t opcode);
 
   // Constructor/Destructor
-  Gatt(Connection* connection);
-  virtual ~Gatt();
+  Att(Connection* connection);
+  virtual ~Att();
 
   // Find information
   void findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data);

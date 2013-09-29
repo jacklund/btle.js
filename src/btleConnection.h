@@ -3,11 +3,11 @@
 
 #include <node.h>
 
-#include "gatt.h"
+#include "att.h"
 
 /**
  * Node.js interface class, does all the node.js object wrapping stuff,
- * and delegates all the protocol stuff to gatt.{h,cc}.
+ * and delegates all the protocol stuff to att.{h,cc}.
  */
 class BTLEConnection: node::ObjectWrap {
 public:
@@ -37,21 +37,21 @@ protected:
   // Emits an error with the given error message
   void emit_error(const char* errorMessage);
 
-  // Callbacks sent into gatt.cc
+  // Callbacks sent into att.cc
   static void onConnect(void* data, int status, int events);
   static void onClose(void* data);
   static bool onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static bool onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static void onWrite(void* data, const char* error);
-  static void onFindInformation(uint8_t status, void* data, Gatt::AttributeList* list, const char* error);
-  static void onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList* list, const char* error);
-  static void onReadByType(uint8_t status, void* data, Gatt::AttributeDataList* list, const char* error);
+  static void onFindInformation(uint8_t status, void* data, Att::AttributeList* list, const char* error);
+  static void onFindByType(uint8_t status, void* data, Att::HandlesInformationList* list, const char* error);
+  static void onReadByType(uint8_t status, void* data, Att::AttributeDataList* list, const char* error);
   static void onError(void* data, const char* error);
 
   void handleConnect(int status, int events);
-  void handleFindInformation(uint8_t status, Gatt::AttributeList& list, struct callbackData* cd, const char* error);
-  void handleFindByType(uint8_t status, Gatt::HandlesInformationList& list, struct callbackData* cd, const char* error);
-  void handleReadByType(uint8_t status, Gatt::AttributeDataList& list, struct callbackData* cd, const char* error);
+  void handleFindInformation(uint8_t status, Att::AttributeList& list, struct callbackData* cd, const char* error);
+  void handleFindByType(uint8_t status, Att::HandlesInformationList& list, struct callbackData* cd, const char* error);
+  void handleReadByType(uint8_t status, Att::AttributeDataList& list, struct callbackData* cd, const char* error);
 
   // Callback called when we tell v8 to make a reference weak
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);
@@ -65,7 +65,7 @@ private:
   static v8::Persistent<v8::Function> constructor;
 
   v8::Handle<v8::Object> self;
-  Gatt* gatt;
+  Att* att;
   Connection* connection;
   v8::Persistent<v8::Function> connectionCallback;
   v8::Persistent<v8::Function> closeCallback;

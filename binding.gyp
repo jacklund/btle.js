@@ -4,7 +4,7 @@
     "target_name": "btle",
       "sources": [
         "src/btio.c",
-        "src/gatt.cc",
+        "src/att.cc",
         "src/btleException.cc",
         "src/btleConnection.cc",
         "src/connection.cc",

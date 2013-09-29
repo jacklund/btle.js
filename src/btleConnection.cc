@@ -24,14 +24,14 @@ struct callbackData {
 };
 
 // Constructor
-BTLEConnection::BTLEConnection() : gatt(NULL), connection(NULL)
+BTLEConnection::BTLEConnection() : att(NULL), connection(NULL)
 {
 }
 
 // Destructor
 BTLEConnection::~BTLEConnection()
 {
-  delete gatt;
+  delete att;
   delete connection;
 }
 
@@ -113,8 +113,8 @@ BTLEConnection::Connect(const Arguments& args)
   conn->connectionCallback = callback;
 
   conn->connection = new Connection();
-  conn->gatt = new Gatt(conn->connection);
-  conn->gatt->onError(onError, conn);
+  conn->att = new Att(conn->connection);
+  conn->att->onError(onError, conn);
   try {
     conn->connection->connect(opts, onConnect, (void*) conn);
   } catch (BTLEException& e) {
@@ -165,7 +165,7 @@ BTLEConnection::FindInformation(const Arguments& args)
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
-  conn->gatt->findInformation(startHandle, endHandle, onFindInformation, cd);
+  conn->att->findInformation(startHandle, endHandle, onFindInformation, cd);
   return scope.Close(Undefined());
 }
 
@@ -223,7 +223,7 @@ BTLEConnection::FindByTypeValue(const Arguments& args)
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
-  conn->gatt->findByTypeValue(startHandle, endHandle, uuid,
+  conn->att->findByTypeValue(startHandle, endHandle, uuid,
       (const uint8_t*) Buffer::Data(args[3]), Buffer::Length(args[3]), onFindByType, cd);
   return scope.Close(Undefined());
 }
@@ -277,7 +277,7 @@ BTLEConnection::ReadByType(const Arguments& args)
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
-  conn->gatt->readByType(startHandle, endHandle, uuid, onReadByType, cd);
+  conn->att->readByType(startHandle, endHandle, uuid, onReadByType, cd);
   return scope.Close(Undefined());
 }
 
@@ -331,7 +331,7 @@ BTLEConnection::ReadByGroupType(const Arguments& args)
   cd->endHandle = endHandle;
 
   // Note: Can re-use onReadByType
-  conn->gatt->readByGroupType(startHandle, endHandle, uuid, onReadByType, cd);
+  conn->att->readByGroupType(startHandle, endHandle, uuid, onReadByType, cd);
   return scope.Close(Undefined());
 }
 
@@ -367,7 +367,7 @@ BTLEConnection::ReadHandle(const Arguments& args)
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->gatt->readAttribute(handle, onReadAttribute, cd);
+  conn->att->readAttribute(handle, onReadAttribute, cd);
   return scope.Close(Undefined());
 }
 
@@ -414,7 +414,7 @@ BTLEConnection::WriteCommand(const v8::Arguments& args)
     cd->data = *callback;
   }
 
-  conn->gatt->writeCommand(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]),
+  conn->att->writeCommand(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]),
       onWrite, cd);
 
   return scope.Close(Undefined());
@@ -446,7 +446,7 @@ BTLEConnection::WriteRequest(const v8::Arguments& args)
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
 
-  conn->gatt->writeRequest(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]));
+  conn->att->writeRequest(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]));
 
   return scope.Close(Undefined());
 }
@@ -483,7 +483,7 @@ BTLEConnection::AddNotificationListener(const Arguments& args)
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->gatt->listenForNotifications(handle, onReadNotification, cd);
+  conn->att->listenForNotifications(handle, onReadNotification, cd);
 
   return scope.Close(Undefined());
 }
@@ -507,7 +507,7 @@ BTLEConnection::Close(const Arguments& args)
     }
   }
 
-  if (conn->gatt) {
+  if (conn->att) {
     conn->connection->close(onClose, (void*) conn);
   }
 
@@ -586,7 +586,7 @@ static void onFree(char* data, void* hint)
 const char*
 BTLEConnection::createErrorMessage(uint8_t err)
 {
-  const char* msg = Gatt::getErrorString(err);
+  const char* msg = Att::getErrorString(err);
   char buffer[128];
   if (msg == NULL) {
     sprintf(buffer, "Error code %02X", err);
@@ -608,7 +608,7 @@ BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* erro
 
 // Find Information callback
 void
-BTLEConnection::onFindInformation(uint8_t status, void* data, Gatt::AttributeList* list, const char* error)
+BTLEConnection::onFindInformation(uint8_t status, void* data, Att::AttributeList* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   cd->conn->handleFindInformation(status, *list, cd, error);
@@ -616,7 +616,7 @@ BTLEConnection::onFindInformation(uint8_t status, void* data, Gatt::AttributeLis
 }
 
 void
-BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleFindInformation(uint8_t status, Att::AttributeList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -625,7 +625,7 @@ BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list,
     Local<Object> response = Object::New();
 
     char buffer[128];
-    Gatt::AttributeList::iterator iter = list.begin();
+    Att::AttributeList::iterator iter = list.begin();
     while (iter != list.end()) {
       Local<Integer> handleLocal = Integer::New(iter->handle);
       bt_uuid_to_string(&iter->uuid, buffer, sizeof(buffer));
@@ -646,7 +646,7 @@ BTLEConnection::handleFindInformation(uint8_t status, Gatt::AttributeList& list,
 // FindByTypeValue callback
 
 void
-BTLEConnection::onFindByType(uint8_t status, void* data, Gatt::HandlesInformationList* list, const char* error)
+BTLEConnection::onFindByType(uint8_t status, void* data, Att::HandlesInformationList* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   cd->conn->handleFindByType(status, *list, cd, error);
@@ -654,7 +654,7 @@ BTLEConnection::onFindByType(uint8_t status, void* data, Gatt::HandlesInformatio
 }
 
 void
-BTLEConnection::handleFindByType(uint8_t status, Gatt::HandlesInformationList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleFindByType(uint8_t status, Att::HandlesInformationList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -663,7 +663,7 @@ BTLEConnection::handleFindByType(uint8_t status, Gatt::HandlesInformationList& l
     Local<Array> response = Array::New(list.size());
 
     size_t index = 0;
-    Gatt::HandlesInformationList::iterator iter = list.begin();
+    Att::HandlesInformationList::iterator iter = list.begin();
     while (iter != list.end()) {
       Local<Object> handlesInfo = Object::New();
       handlesInfo->Set(String::NewSymbol("foundHandle"), Integer::New(iter->foundHandle));
@@ -684,7 +684,7 @@ BTLEConnection::handleFindByType(uint8_t status, Gatt::HandlesInformationList& l
 // ReadByType callback
 
 void
-BTLEConnection::onReadByType(uint8_t status, void* data, Gatt::AttributeDataList* list, const char* error)
+BTLEConnection::onReadByType(uint8_t status, void* data, Att::AttributeDataList* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   cd->conn->handleReadByType(status, *list, cd, error);
@@ -692,7 +692,7 @@ BTLEConnection::onReadByType(uint8_t status, void* data, Gatt::AttributeDataList
 }
 
 void
-BTLEConnection::handleReadByType(uint8_t status, Gatt::AttributeDataList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleReadByType(uint8_t status, Att::AttributeDataList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -701,7 +701,7 @@ BTLEConnection::handleReadByType(uint8_t status, Gatt::AttributeDataList& list, 
     Local<Array> response = Array::New(list.size());
 
     size_t index = 0;
-    Gatt::AttributeDataList::iterator iter = list.begin();
+    Att::AttributeDataList::iterator iter = list.begin();
     while (iter != list.end()) {
       Local<Object> attributeData = Object::New();
       attributeData->Set(String::NewSymbol("handle"), Integer::New(iter->handle));
