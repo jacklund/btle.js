@@ -5,6 +5,8 @@ btle.js
 Node.js Bluetooth LE module for Linux. Uses a C/C++ addon to make direct calls to the Linux Bluetooth stack. Currently supported functionality includes:
 
 * Read Attribute
+* Read by Group Type
+* Read by Type
 * Write Command
 * Write Request
 * Find Information
@@ -13,10 +15,13 @@ Node.js Bluetooth LE module for Linux. Uses a C/C++ addon to make direct calls t
 Still to be implemented:
 
 * Read Multiple
-* Read by Group Type
-* Read by Type
 * Read Blob
 * Listen for Indications
+
+I've also modified the interface so the ATT functions now return an attribute object, which contains an integer handle,
+a UUID type, and a value as a buffer. Note that, depending on what function you call, one of the values may be null
+because it's not returned by the particular call. Next iteration I plan on introducing attribute caching, so as
+you make the calls, it populates the attributes it returns with the information it already knows about.
 
 ## Installation
 btle.js is available on [npm](https://npmjs.org/package/btle.js). To install it from there, just do:
@@ -47,11 +52,12 @@ You can also just clone the project.
       });
 
       // Listen for notifications for handle 0x25
-      conn.addNotificationListener(0x25, function(err, buffer) {
+      // Function returns an error string and an attribute
+      conn.addNotificationListener(0x25, function(err, attrib) {
         if (err) {
           console.log("Notification error: " + err);
         } else {
-          console.log("Temperature, " + buffer.readUInt16LE(0) + ", " + buffer.readUInt16LE(2));
+          console.log("Temperature, " + attrib.value.readUInt16LE(0) + ", " + attrib.value.readUInt16LE(2));
         }
       });
 

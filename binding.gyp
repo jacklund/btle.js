@@ -5,6 +5,7 @@
       "sources": [
         "src/btio.c",
         "src/att.cc",
+        "src/attribute.cc",
         "src/btleException.cc",
         "src/btleConnection.cc",
         "src/connection.cc",
