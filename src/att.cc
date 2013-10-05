@@ -136,7 +136,7 @@ Att::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, const bt_u
 // Constructor
 Att::Att(Connection* conn)
   : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
-    callbackData(NULL), attributeList(NULL)
+    attributeList(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&notificationMapLock, NULL);
@@ -146,6 +146,11 @@ Att::Att(Connection* conn)
 Att::~Att()
 {
   pthread_mutex_destroy(&notificationMapLock);
+  AttributeCache::iterator iter = attributeCache.begin();
+  while (iter != attributeCache.end()) {
+    delete iter->second;
+    iter++;
+  }
 }
 
 bool
@@ -174,11 +179,11 @@ Att::setCurrentRequest(opcode_t request, opcode_t response, void* data, handle_t
 {
   // Set up the callback for the read
   struct readData* rd = new struct readData();
-  rd->att = this;
-  rd->handle = handle;
   rd->request = request;
   rd->expectedResponse = response;
+  rd->att = this;
   rd->data = data;
+  rd->handle = handle;
   if (type != NULL) rd->type = *type;
   rd->attrListCb = attrCallback;
   rd->callback = callback;
@@ -419,8 +424,7 @@ Att::handleReadAttribute(int status, struct readData* rd, uint8_t* buf, int len,
     rd->readAttrCb(status, rd->data, NULL, error);
     return true;
   } else {
-    Attribute* attribute = new Attribute();
-    attribute->setHandle(rd->handle);
+    Attribute* attribute = getAttribute(rd->handle);
     attribute->setValue(buf, len);
     rd->readAttrCb(status, rd->data, attribute, error);
     return true;
@@ -439,10 +443,11 @@ Att::listenForNotifications(uint16_t handle, ReadAttributeCallback callback, voi
 {
   // Set up the read callback
   struct readData* rd = new struct readData();
+  rd->att = this;
   rd->data = data;
+  rd->handle = handle;
   rd->readAttrCb = callback;
   rd->callback = onNotification;
-  rd->handle = handle;
   {
     LockGuard(this->notificationMapLock);
     notificationMap.insert(std::pair<handle_t, struct readData*>(handle, rd));
@@ -457,8 +462,7 @@ Att::onNotification(int status, struct readData* rd, uint8_t* buf, int len, cons
   } else if (status != 0) {
     rd->readAttrCb(status, rd->data, NULL, error);
   } else {
-    Attribute* attribute = new Attribute();
-    attribute->setHandle(rd->handle);
+    Attribute* attribute = rd->att->getAttribute(rd->handle);
     attribute->setValue(buf, len);
     rd->readAttrCb(status, rd->data, attribute, error);
   }
@@ -593,8 +597,7 @@ Att::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
   uint8_t* ptr = &buf[1];
   Attribute* attribute;
   while (ptr - buf < len) {
-    attribute = new Attribute();
-    attribute->setHandle(att_get_u16(ptr));
+    attribute = getAttribute(att_get_u16(ptr));
     ptr += sizeof(handle_t);
     bt_uuid_t uuid;
     if (format == ATT_FIND_INFO_RESP_FMT_16BIT) {
@@ -622,8 +625,7 @@ Att::parseHandlesInformationList(AttributeList& list, const bt_uuid_t& type, uin
     ptr += sizeof(handle_t);
     handle_t handle = foundHandle;
     while (handle <= groupEndHandle) {
-      attribute = new Attribute();
-      attribute->setHandle(handle);
+      attribute = getAttribute(handle);
       attribute->setType(type);
       list.push_back(attribute);
       handle++;
@@ -638,9 +640,8 @@ Att::parseAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t*
   uint8_t length = *ptr++;
   Attribute* attribute;
   while (ptr - buf < len) {
-    attribute = new Attribute();
+    attribute = getAttribute(att_get_u16(ptr));
     attribute->setType(type);
-    attribute->setHandle(att_get_u16(ptr));
     ptr += sizeof(handle_t);
     attribute->setValue(ptr, length-2);
     ptr += length-2;
@@ -660,8 +661,7 @@ Att::parseGroupAttributeDataList(AttributeList& list, const bt_uuid_t& type, uin
     handle_t groupEndHandle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
     while (handle <= groupEndHandle) {
-      attribute = new Attribute();
-      attribute->setHandle(handle++);
+      attribute = getAttribute(handle++);
       attribute->setType(type);
       attribute->setValue(ptr, length-4);
       list.push_back(attribute);
@@ -673,6 +673,20 @@ Att::parseGroupAttributeDataList(AttributeList& list, const bt_uuid_t& type, uin
 //
 // Utilities
 //
+
+Attribute*
+Att::getAttribute(handle_t handle)
+{
+  AttributeCache::iterator iter = attributeCache.find(handle);
+  if (iter != attributeCache.end()) {
+    return iter->second;
+  } else {
+    Attribute* ret = new Attribute();
+    ret->setHandle(handle);
+    attributeCache.insert(std::make_pair(handle, ret));
+    return ret;
+  }
+}
 
 void
 Att::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error)

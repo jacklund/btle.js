@@ -20,8 +20,9 @@ Still to be implemented:
 
 I've also modified the interface so the ATT functions now return an attribute object, which contains an integer handle,
 a UUID type, and a value as a buffer. Note that, depending on what function you call, one of the values may be null
-because it's not returned by the particular call. Next iteration I plan on introducing attribute caching, so as
-you make the calls, it populates the attributes it returns with the information it already knows about.
+because it's not returned by the particular call.
+
+I've added attribute caching as well, so that as you make the calls, it populates the attributes it returns with the information it already knows about.
 
 ## Installation
 btle.js is available on [npm](https://npmjs.org/package/btle.js). To install it from there, just do:

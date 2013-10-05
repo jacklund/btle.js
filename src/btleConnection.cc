@@ -533,7 +533,6 @@ BTLEConnection::getAttribute(Attribute* attribute)
   } else {
     ret->Set(String::New("value"), Buffer::New(String::New((char*) value, vlen)));
   }
-  delete attribute;
 
   return ret;
 }

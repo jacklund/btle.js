@@ -87,6 +87,10 @@ private:
   // Make the callback for the current request
   void callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error);
 
+  // Get an attribute from the cache, or, if not there,
+  // create a new one and add it to the cache
+  Attribute* getAttribute(handle_t handle);
+
   // Remove the current request atomically
   void removeCurrentRequest();
 
@@ -118,10 +122,10 @@ private:
 
   static bool onNotification(int status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
-  static void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
-  static void parseHandlesInformationList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len);
-  static void parseAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len);
-  static void parseGroupAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len);
+  void parseAttributeList(AttributeList& list, uint8_t* buf, int len);
+  void parseHandlesInformationList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len);
+  void parseAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len);
+  void parseGroupAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len);
 
   // Internal data
   Connection* connection;  // Bluetooth connection
@@ -133,10 +137,13 @@ private:
   // Current outstanding request
   struct readData* currentRequest;
 
-  ReadAttributeCallback readCallback;
-  void* callbackData;
-
+  // Cached attribute list, used for repeated findInformation(),
+  // since it may have to make multiple calls to the device
   AttributeList* attributeList;
+
+  // Attribute cache
+  typedef std::map<handle_t, Attribute*> AttributeCache;
+  AttributeCache attributeCache;
 
   // Map of handle => callback
   typedef std::map<handle_t, readData*> NotificationMap;
