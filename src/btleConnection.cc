@@ -531,7 +531,8 @@ BTLEConnection::getAttribute(Attribute* attribute)
   if (value == NULL) {
     ret->Set(String::New("value"), Null());
   } else {
-    ret->Set(String::New("value"), Buffer::New(String::New((char*) value, vlen)));
+    Buffer* buf = Buffer::New((char*) value, vlen);
+    ret->Set(String::New("value"), buf->handle_);
   }
 
   return ret;
