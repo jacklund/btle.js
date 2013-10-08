@@ -18,6 +18,17 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
   });
 
   /*
+  //conn.discoverServices('0x1801', function(err, serviceList) {
+  //conn.discoverServices('f000ffc0-0451-4000-b000-000000000000', function(err, serviceList) {
+  conn.discoverServices(null, function(err, serviceList) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(serviceList);
+    }
+  });
+  */
+
   conn.findInformation(0x0001, 0xffff, function(err, object) {
     if (err) {
       console.log("Got error: " + err);
@@ -25,31 +36,31 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
       console.log(object);
     }
   });
-  */
 
+/*
   // Listen for notifications
-  conn.addNotificationListener(0x25, function(err, attrib) {
+  conn.addNotificationListener(0x25, function(err, value) {
     if (err) {
       console.log("Notification error: " + err);
     } else {
-      console.log("Temperature, " + attrib.value.readUInt16LE(0) + ", " + attrib.value.readUInt16LE(2));
+      console.log("Temperature, " + value.readUInt16LE(0) + ", " + value.readUInt16LE(2));
     }
   });
 
-  conn.addNotificationListener(0x2D, function(err, attrib) {
+  conn.addNotificationListener(0x2D, function(err, value) {
     if (err) {
       console.log("Notification error: " + err);
     } else {
-      console.log("Accelerometer, " + attrib.value.readUInt8(0) + ", " + attrib.value.readUInt8(1) + ", " + attrib.value.readUInt8(2));
+      console.log("Accelerometer, " + value.readUInt8(0) + ", " + value.readUInt8(1) + ", " + value.readUInt8(2));
     }
   });
 
   // Read from handle 0x25
-  conn.readHandle(0x25, function(err, attrib) {
+  conn.readHandle(0x25, function(err, value) {
     if (err) {
       console.log("Error: " + err);
     } else {
-      console.log(attrib);
+      console.log(value);
     }
 
     // Write a 1 to handle 0x29 to turn on the thermometer
@@ -70,4 +81,5 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
       });
     }, 1000);
   });
+  */
 });

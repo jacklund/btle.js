@@ -24,7 +24,7 @@ private:
 struct Att::readData {
   readData()
     : request(0), expectedResponse(0), att(NULL), data(NULL),
-      handle(0), callback(NULL), readAttrCb(NULL), attrListCb(NULL)
+      handle(0), value(NULL), vlen(0), callback(NULL), readAttrCb(NULL), attrListCb(NULL)
   {}
 
   opcode_t request;
@@ -33,6 +33,8 @@ struct Att::readData {
   void* data;
   handle_t handle;
   bt_uuid_t type;
+  const uint8_t* value;
+  size_t vlen;
   ReadCallback callback;
   ReadAttributeCallback readAttrCb;
   AttributeListCallback attrListCb;
@@ -136,7 +138,7 @@ Att::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, const bt_u
 // Constructor
 Att::Att(Connection* conn)
   : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
-    attributeList(NULL)
+    attributeList(NULL), groupAttributeList(NULL), handlesInfoList(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&notificationMapLock, NULL);
@@ -146,16 +148,11 @@ Att::Att(Connection* conn)
 Att::~Att()
 {
   pthread_mutex_destroy(&notificationMapLock);
-  AttributeCache::iterator iter = attributeCache.begin();
-  while (iter != attributeCache.end()) {
-    delete iter->second;
-    iter++;
-  }
 }
 
 bool
 Att::setCurrentRequest(opcode_t request, opcode_t response, void* data,
-    handle_t handle, ReadCallback callback, ReadAttributeCallback attrCallback)
+    handle_t handle, ReadCallback callback, ReadAttributeCallback readAttrCb)
 {
   // Set up the callback for the read
   struct readData* rd = new struct readData();
@@ -164,8 +161,8 @@ Att::setCurrentRequest(opcode_t request, opcode_t response, void* data,
   rd->expectedResponse = response;
   rd->data = data;
   rd->handle = handle;
-  rd->readAttrCb = attrCallback;
   rd->callback = callback;
+  rd->readAttrCb = readAttrCb;
 
   bool ret =__sync_bool_compare_and_swap(&currentRequest, NULL, rd);
   if (!ret) delete rd;
@@ -175,7 +172,7 @@ Att::setCurrentRequest(opcode_t request, opcode_t response, void* data,
 
 bool
 Att::setCurrentRequest(opcode_t request, opcode_t response, void* data, handle_t handle, const bt_uuid_t* type,
-    ReadCallback callback, AttributeListCallback attrCallback)
+    ReadCallback callback, AttributeListCallback attrCallback, const uint8_t* value, size_t vlen)
 {
   // Set up the callback for the read
   struct readData* rd = new struct readData();
@@ -185,6 +182,10 @@ Att::setCurrentRequest(opcode_t request, opcode_t response, void* data, handle_t
   rd->data = data;
   rd->handle = handle;
   if (type != NULL) rd->type = *type;
+  if (value != NULL) {
+    rd->value = value;
+    rd->vlen = vlen;
+  }
   rd->attrListCb = attrCallback;
   rd->callback = callback;
 
@@ -200,10 +201,11 @@ Att::setCurrentRequest(opcode_t request, opcode_t response, void* data, handle_t
 void
 Att::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data)
 {
+  // Note: We set the handle to the endHandle, so we can know whether we should make repeated calls to get more info
   if (setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, data, endHandle, NULL, onFindInfo, callback)) {
     doFindInformation(startHandle, endHandle);
   } else {
-    callback(0, data, new AttributeList(), "Request already pending");
+    callback(0, data, NULL, "Request already pending");
   }
 }
 
@@ -218,19 +220,19 @@ Att::doFindInformation(handle_t startHandle, handle_t endHandle)
 }
 
 bool
-Att::onFindInfo(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::onFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleFindInfo(status, rd, buf, len, error);
 }
 
 bool
-Att::handleFindInfo(int status, struct readData* rd, uint8_t* buf, size_t len, const char* error)
+Att::handleFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, size_t len, const char* error)
 {
   if (status == 0) {
-    if (attributeList == NULL) attributeList = new AttributeList();
+    if (attributeList == NULL) attributeList = new AttributeInfoList();
     parseAttributeList(*attributeList, buf, len);
-    if (attributeList->back()->getHandle() < rd->handle) {
-      doFindInformation(attributeList->back()->getHandle()+1, rd->handle);
+    if (attributeList->back()->handle < rd->handle) {
+      doFindInformation(attributeList->back()->handle+1, rd->handle);
       return false;
     } else {
       rd->attrListCb(status, rd->data, attributeList, error);
@@ -261,10 +263,14 @@ void
 Att::findByTypeValue(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& type,
   const uint8_t* value, size_t vlen, AttributeListCallback callback, void* data)
 {
-  if (setCurrentRequest(ATT_OP_FIND_BY_TYPE_REQ, ATT_OP_FIND_BY_TYPE_RESP, data, endHandle, &type, onFindByType, callback)) {
+  char buffer[128];
+  bt_uuid_to_string(&type, buffer, sizeof(buffer));
+  // Note: We set the handle to the endHandle, so we can know whether we should make repeated calls to get more info
+  if (setCurrentRequest(ATT_OP_FIND_BY_TYPE_REQ, ATT_OP_FIND_BY_TYPE_RESP, data, endHandle,
+        &type, onFindByType, callback, value, vlen)) {
     doFindByType(startHandle, endHandle, type, value, vlen);
   } else {
-    callback(0, data, new AttributeList(), "Request already pending");
+    callback(0, data, NULL, "Request already pending");
   }
 }
 
@@ -281,21 +287,42 @@ Att::doFindByType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& typ
 }
 
 bool
-Att::onFindByType(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::onFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleFindByType(status, rd, buf, len, error);
 }
 
 bool
-Att::handleFindByType(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::handleFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
-  AttributeList* attributeList = new AttributeList();
-  if (error) {
-    rd->attrListCb(status, rd->data, attributeList, error);
+  if (status == 0) {
+    if (handlesInfoList == NULL) handlesInfoList = new HandlesInfoList();
+    parseHandlesInformationList(*handlesInfoList, rd->type, buf, len);
+    if (handlesInfoList->back()->handle < rd->handle) {
+      doFindByType(handlesInfoList->back()->handle+1, rd->handle, rd->type, rd->value, rd->vlen);
+      return false;
+    } else {
+      rd->attrListCb(status, rd->data, handlesInfoList, error);
+      handlesInfoList = NULL;
+      return true;
+    }
+  } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
+    if (handlesInfoList == NULL) {
+      rd->attrListCb(0, rd->data, NULL, getErrorString(status));
+      return true;
+    } else {
+      // This means we've reached the end of the list
+      // Note: Need to null out error string and status
+      rd->attrListCb(0, rd->data, handlesInfoList, NULL);
+      handlesInfoList = NULL;
+      return true;
+    }
+  } else if (error) {
+    rd->attrListCb(status, rd->data, handlesInfoList, error);
     return true;
   } else {
-    parseHandlesInformationList(*attributeList, rd->type, buf, len);
-    rd->attrListCb(status, rd->data, attributeList, error);
+    rd->attrListCb(status, rd->data, handlesInfoList, error);
+    handlesInfoList = NULL;
     return true;
   }
 }
@@ -310,7 +337,7 @@ Att::readByType(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& type,
   if (setCurrentRequest(ATT_OP_READ_BY_TYPE_REQ, ATT_OP_READ_BY_TYPE_RESP, data, endHandle, &type, onReadByType, callback)) {
     doReadByType(startHandle, endHandle, type);
   } else {
-    callback(0, data, new AttributeList(), "Request already pending");
+    callback(0, data, NULL, "Request already pending");
   }
 }
 
@@ -326,15 +353,15 @@ Att::doReadByType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& typ
 }
 
 bool
-Att::onReadByType(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::onReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleReadByType(status, rd, buf, len, error);
 }
 
 bool
-Att::handleReadByType(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::handleReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
-  AttributeList* attributeList = new AttributeList();
+  AttributeDataList* attributeList = new AttributeDataList();
   if (error) {
     rd->attrListCb(status, rd->data, attributeList, error);
     return true;
@@ -355,7 +382,7 @@ Att::readByGroupType(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& 
   if (setCurrentRequest(ATT_OP_READ_BY_GROUP_REQ, ATT_OP_READ_BY_GROUP_RESP, data, endHandle, &type, onReadByGroupType, callback)) {
     doReadByGroupType(startHandle, endHandle, type);
   } else {
-    callback(0, data, new AttributeList(), "Request already pending");
+    callback(0, data, NULL, "Request already pending");
   }
 }
 
@@ -371,21 +398,37 @@ Att::doReadByGroupType(handle_t startHandle, handle_t endHandle, const bt_uuid_t
 }
 
 bool
-Att::onReadByGroupType(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::onReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleReadByGroupType(status, rd, buf, len, error);
 }
 
 bool
-Att::handleReadByGroupType(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::handleReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
-  AttributeList* attributeList = new AttributeList();
-  if (error) {
-    rd->attrListCb(status, rd->data, attributeList, error);
+  if (status == 0) {
+    if (groupAttributeList == NULL) groupAttributeList = new GroupAttributeDataList();
+    parseGroupAttributeDataList(*groupAttributeList, rd->type, buf, len);
+    if (groupAttributeList->back()->handle < rd->handle) {
+      doReadByGroupType(groupAttributeList->back()->handle+1, rd->handle, rd->type);
+      return false;
+    } else {
+      rd->attrListCb(status, rd->data, groupAttributeList, error);
+      groupAttributeList = NULL;
+      return true;
+    }
+  } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
+    // This means we've reached the end of the list
+    // Note: Need to null out error string and status
+    rd->attrListCb(0, rd->data, groupAttributeList, NULL);
+    groupAttributeList = NULL;
+    return true;
+  } else if (error) {
+    rd->attrListCb(status, rd->data, groupAttributeList, error);
     return true;
   } else {
-    parseGroupAttributeDataList(*attributeList, rd->type, buf, len);
-    rd->attrListCb(status, rd->data, attributeList, error);
+    rd->attrListCb(status, rd->data, groupAttributeList, error);
+    groupAttributeList = NULL;
     return true;
   }
 }
@@ -407,28 +450,15 @@ Att::readAttribute(uint16_t handle, ReadAttributeCallback callback, void* data)
     buf.len = len;
     connection->write(buf);
   } else {
-    callback(0, data, NULL, "Request already pending");
+    callback(0, data, NULL, 0, "Request already pending");
   }
 }
 
 bool
-Att::onReadAttribute(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
+Att::onReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
-  return rd->att->handleReadAttribute(status, rd, buf, len, error);
-}
-
-bool
-Att::handleReadAttribute(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
-{
-  if (error) {
-    rd->readAttrCb(status, rd->data, NULL, error);
-    return true;
-  } else {
-    Attribute* attribute = getAttribute(rd->handle);
-    attribute->setValue(buf, len);
-    rd->readAttrCb(status, rd->data, attribute, error);
-    return true;
-  }
+  rd->readAttrCb(status, rd->data, buf, len, error);
+  return true;
 }
 
 //
@@ -446,27 +476,12 @@ Att::listenForNotifications(uint16_t handle, ReadAttributeCallback callback, voi
   rd->att = this;
   rd->data = data;
   rd->handle = handle;
+  rd->callback = onReadAttribute;
   rd->readAttrCb = callback;
-  rd->callback = onNotification;
   {
     LockGuard(this->notificationMapLock);
     notificationMap.insert(std::pair<handle_t, struct readData*>(handle, rd));
   }
-}
-
-bool
-Att::onNotification(int status, struct readData* rd, uint8_t* buf, int len, const char* error)
-{
-  if (error) {
-    rd->readAttrCb(status, rd->data, NULL, error);
-  } else if (status != 0) {
-    rd->readAttrCb(status, rd->data, NULL, error);
-  } else {
-    Attribute* attribute = rd->att->getAttribute(rd->handle);
-    attribute->setValue(buf, len);
-    rd->readAttrCb(status, rd->data, attribute, error);
-  }
-  return true;
 }
 
 //
@@ -591,22 +606,20 @@ Att::handleRead(void* data, uint8_t* buf, int nread, const char* error)
 }
 
 void
-Att::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
+Att::parseAttributeList(AttributeInfoList& list, uint8_t* buf, int len)
 {
   uint8_t format = buf[0];
   uint8_t* ptr = &buf[1];
-  Attribute* attribute;
+  AttributeInfo* attribute;
   while (ptr - buf < len) {
-    attribute = getAttribute(att_get_u16(ptr));
+    attribute = new AttributeInfo();
+    attribute->handle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
-    bt_uuid_t uuid;
     if (format == ATT_FIND_INFO_RESP_FMT_16BIT) {
-      uuid = att_get_uuid16(ptr);
-      attribute->setType(uuid);
+      attribute->type = att_get_uuid16(ptr);
       ptr += sizeof(uint16_t);
     } else {
-      uuid = att_get_uuid128(ptr);
-      attribute->setType(uuid);
+      attribute->type = att_get_uuid128(ptr);
       ptr += sizeof(uint128_t);
     }
     list.push_back(attribute);
@@ -614,79 +627,59 @@ Att::parseAttributeList(AttributeList& list, uint8_t* buf, int len)
 }
 
 void
-Att::parseHandlesInformationList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len)
+Att::parseHandlesInformationList(HandlesInfoList& list, const bt_uuid_t& type, uint8_t* buf, int len)
 {
   uint8_t* ptr = &buf[0];
-  Attribute* attribute;
+  struct HandlesInfo* handlesInfo;
   while (ptr - buf < len) {
-    handle_t foundHandle = att_get_u16(ptr);
+    handlesInfo = new struct HandlesInfo();
+    handlesInfo->handle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
-    handle_t groupEndHandle = att_get_u16(ptr);
+    handlesInfo->groupEndHandle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
-    handle_t handle = foundHandle;
-    while (handle <= groupEndHandle) {
-      attribute = getAttribute(handle);
-      attribute->setType(type);
-      list.push_back(attribute);
-      handle++;
-    }
+    list.push_back(handlesInfo);
   }
 }
 
 void
-Att::parseAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len)
+Att::parseAttributeDataList(AttributeDataList& list, const bt_uuid_t& type, uint8_t* buf, int len)
 {
   uint8_t* ptr = &buf[0];
   uint8_t length = *ptr++;
-  Attribute* attribute;
+  struct AttributeData* attribute;
   while (ptr - buf < len) {
-    attribute = getAttribute(att_get_u16(ptr));
-    attribute->setType(type);
+    attribute = new struct AttributeData();
+    attribute->handle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
-    attribute->setValue(ptr, length-2);
+    memcpy(attribute->data, ptr, length-2);
+    attribute->length = length-2;
     ptr += length-2;
     list.push_back(attribute);
   }
 }
 
 void
-Att::parseGroupAttributeDataList(AttributeList& list, const bt_uuid_t& type, uint8_t* buf, int len)
+Att::parseGroupAttributeDataList(GroupAttributeDataList& list, const bt_uuid_t& type, uint8_t* buf, int len)
 {
   uint8_t* ptr = &buf[0];
   uint8_t length = *ptr++;
-  Attribute* attribute;
+  struct GroupAttributeData* attrData;
   while (ptr - buf < len) {
-    handle_t handle = att_get_u16(ptr);
+    attrData = new struct GroupAttributeData();
+    attrData->handle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
-    handle_t groupEndHandle = att_get_u16(ptr);
+    attrData->groupEndHandle = att_get_u16(ptr);
     ptr += sizeof(handle_t);
-    while (handle <= groupEndHandle) {
-      attribute = getAttribute(handle++);
-      attribute->setType(type);
-      attribute->setValue(ptr, length-4);
-      list.push_back(attribute);
-    }
+    memcpy(attrData->data, ptr, length-4);
+    attrData->length = length-4;
     ptr += length-4;
+    list.push_back(attrData);
   }
 }
 
 //
 // Utilities
 //
-
-Attribute*
-Att::getAttribute(handle_t handle)
-{
-  AttributeCache::iterator iter = attributeCache.find(handle);
-  if (iter != attributeCache.end()) {
-    return iter->second;
-  } else {
-    Attribute* ret = new Attribute();
-    ret->setHandle(handle);
-    attributeCache.insert(std::make_pair(handle, ret));
-    return ret;
-  }
-}
 
 void
 Att::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error)

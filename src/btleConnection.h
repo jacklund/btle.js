@@ -33,7 +33,10 @@ public:
 
 protected:
   // Convert an attribute object to a Javascript object
-  static v8::Local<v8::Object> getAttribute(Attribute* attribute);
+  static v8::Local<v8::Object> getAttributeInfo(Att::AttributeInfo* attribute);
+  static v8::Local<v8::Object> getHandlesInfo(Att::HandlesInfo* attribute);
+  static v8::Local<v8::Object> getAttributeData(Att::AttributeData* attribute);
+  static v8::Local<v8::Object> getGroupAttributeData(Att::GroupAttributeData* attribute);
 
   // Emits an error based on the last error
   void emit_error();
@@ -43,20 +46,20 @@ protected:
   // Callbacks sent into att.cc
   static void onConnect(void* data, int status, int events);
   static void onClose(void* data);
-  static bool onReadAttribute(uint8_t status, void* data, Attribute* attribute, const char* error);
-  static bool onReadNotification(uint8_t status, void* data, Attribute* attribute, const char* error);
+  static bool onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  static bool onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static void onWrite(void* data, const char* error);
-  static void onFindInformation(uint8_t status, void* data, AttributeList* list, const char* error);
-  static void onFindByType(uint8_t status, void* data, AttributeList* list, const char* error);
-  static void onReadByType(uint8_t status, void* data, AttributeList* list, const char* error);
-  static void onReadByGroupType(uint8_t status, void* data, AttributeList* list, const char* error);
+  static void onFindInformation(uint8_t status, void* data, void* list, const char* error);
+  static void onFindByType(uint8_t status, void* data, void* list, const char* error);
+  static void onReadByType(uint8_t status, void* data, void* list, const char* error);
+  static void onReadByGroupType(uint8_t status, void* data, void* list, const char* error);
   static void onError(void* data, const char* error);
 
   void handleConnect(int status, int events);
-  void handleFindInformation(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error);
-  void handleFindByType(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error);
-  void handleReadByType(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error);
-  void handleReadByGroupType(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error);
+  void handleFindInformation(uint8_t status, Att::AttributeInfoList& list, struct callbackData* cd, const char* error);
+  void handleFindByType(uint8_t status, Att::HandlesInfoList& list, struct callbackData* cd, const char* error);
+  void handleReadByType(uint8_t status, Att::AttributeDataList& list, struct callbackData* cd, const char* error);
+  void handleReadByGroupType(uint8_t status, Att::GroupAttributeDataList& list, struct callbackData* cd, const char* error);
 
   // Callback called when we tell v8 to make a reference weak
   static void weak_cb(v8::Persistent<v8::Value> object, void* parameter);

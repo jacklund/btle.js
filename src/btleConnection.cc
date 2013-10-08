@@ -109,7 +109,7 @@ BTLEConnection::Connect(const Arguments& args)
 
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
   conn->connectionCallback = callback;
 
   conn->connection = new Connection();
@@ -153,7 +153,7 @@ BTLEConnection::FindInformation(const Arguments& args)
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
 
   int startHandle, endHandle;
   getIntValue(args[0]->ToNumber(), startHandle);
@@ -208,7 +208,7 @@ BTLEConnection::FindByTypeValue(const Arguments& args)
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[4]));
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
 
   int startHandle, endHandle;
   getIntValue(args[0]->ToNumber(), startHandle);
@@ -262,7 +262,7 @@ BTLEConnection::ReadByType(const Arguments& args)
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[3]));
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
 
   int startHandle, endHandle;
   getIntValue(args[0]->ToNumber(), startHandle);
@@ -315,7 +315,7 @@ BTLEConnection::ReadByGroupType(const Arguments& args)
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[3]));
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
 
   int startHandle, endHandle;
   getIntValue(args[0]->ToNumber(), startHandle);
@@ -359,7 +359,7 @@ BTLEConnection::ReadHandle(const Arguments& args)
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
   
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
@@ -400,7 +400,7 @@ BTLEConnection::WriteCommand(const v8::Arguments& args)
     }
 
     callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
-    callback.MakeWeak(*callback, weak_cb);
+    //callback.MakeWeak(*callback, weak_cb);
   }
 
   BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
@@ -475,7 +475,7 @@ BTLEConnection::AddNotificationListener(const Arguments& args)
   }
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
-  callback.MakeWeak(*callback, weak_cb);
+  //callback.MakeWeak(*callback, weak_cb);
 
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
@@ -502,7 +502,7 @@ BTLEConnection::Close(const Arguments& args)
       return scope.Close(Undefined());
     } else {
       Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
-      callback.MakeWeak(*callback, weak_cb);
+      //callback.MakeWeak(*callback, weak_cb);
       conn->closeCallback = callback;
     }
   }
@@ -515,25 +515,48 @@ BTLEConnection::Close(const Arguments& args)
 }
 
 Local<Object>
-BTLEConnection::getAttribute(Attribute* attribute)
+BTLEConnection::getAttributeInfo(Att::AttributeInfo* attribute)
 {
   Local<Object> ret = Object::New();
-  ret->Set(String::New("handle"), attribute->getHandle() > 0 ? Integer::New(attribute->getHandle()) : Null());
-  if (!attribute->containsType()) {
-    ret->Set(String::New("type"), Null());
-  } else {
-    char buffer[128];
-    bt_uuid_to_string(&attribute->getType(), buffer, sizeof(buffer));
-    ret->Set(String::New("type"), String::New(buffer));
-  }
-  size_t vlen = 0;
-  const uint8_t* value = attribute->getValue(vlen);
-  if (value == NULL) {
-    ret->Set(String::New("value"), Null());
-  } else {
-    Buffer* buf = Buffer::New((char*) value, vlen);
-    ret->Set(String::New("value"), buf->handle_);
-  }
+  ret->Set(String::New("handle"), Integer::New(attribute->handle));
+  char buffer[128];
+  bt_uuid_to_string(&attribute->type, buffer, sizeof(buffer));
+  ret->Set(String::New("type"), String::New(buffer));
+
+  return ret;
+}
+
+Local<Object>
+BTLEConnection::getHandlesInfo(Att::HandlesInfo* attribute)
+{
+  Local<Object> ret = Object::New();
+  ret->Set(String::New("handle"), Integer::New(attribute->handle));
+  ret->Set(String::New("groupEndHandle"), Integer::New(attribute->groupEndHandle));
+
+  return ret;
+}
+
+Local<Object>
+BTLEConnection::getAttributeData(Att::AttributeData* attribute)
+{
+  Local<Object> ret = Object::New();
+  ret->Set(String::New("handle"), Integer::New(attribute->handle));
+  Buffer* buffer = Buffer::New(attribute->length);
+  memcpy(Buffer::Data(buffer), attribute->data, attribute->length);
+  ret->Set(String::New("data"), buffer->handle_);
+
+  return ret;
+}
+
+Local<Object>
+BTLEConnection::getGroupAttributeData(Att::GroupAttributeData* attribute)
+{
+  Local<Object> ret = Object::New();
+  ret->Set(String::New("handle"), Integer::New(attribute->handle));
+  ret->Set(String::New("groupEndHandle"), Integer::New(attribute->groupEndHandle));
+  Buffer* buffer = Buffer::New(attribute->length);
+  memcpy(Buffer::Data(buffer), attribute->data, attribute->length);
+  ret->Set(String::New("data"), buffer->handle_);
 
   return ret;
 }
@@ -626,15 +649,16 @@ BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* erro
 
 // Find Information callback
 void
-BTLEConnection::onFindInformation(uint8_t status, void* data, AttributeList* list, const char* error)
+BTLEConnection::onFindInformation(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  cd->conn->handleFindInformation(status, *list, cd, error);
-  delete list;
+  Att::AttributeInfoList* infoList = (Att::AttributeInfoList*) list;
+  cd->conn->handleFindInformation(status, *infoList, cd, error);
+  delete infoList;
 }
 
 void
-BTLEConnection::handleFindInformation(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleFindInformation(uint8_t status, Att::AttributeInfoList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -642,10 +666,11 @@ BTLEConnection::handleFindInformation(uint8_t status, AttributeList& list, struc
     // Create the response object
     Local<Array> response = Array::New(list.size());
 
-    AttributeList::iterator iter = list.begin();
+    Att::AttributeInfoList::iterator iter = list.begin();
     size_t index = 0;
     while (iter != list.end()) {
-      response->Set(index++, getAttribute(*iter));
+      response->Set(index++, getAttributeInfo(*iter));
+      delete *iter;
       ++iter;
     }
     Persistent<Function> callback = static_cast<Function*>(cd->data);
@@ -661,15 +686,16 @@ BTLEConnection::handleFindInformation(uint8_t status, AttributeList& list, struc
 // FindByTypeValue callback
 
 void
-BTLEConnection::onFindByType(uint8_t status, void* data, AttributeList* list, const char* error)
+BTLEConnection::onFindByType(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  cd->conn->handleFindByType(status, *list, cd, error);
-  delete list;
+  Att::HandlesInfoList* infoList = (Att::HandlesInfoList*) list;
+  cd->conn->handleFindByType(status, *infoList, cd, error);
+  delete infoList;
 }
 
 void
-BTLEConnection::handleFindByType(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleFindByType(uint8_t status, Att::HandlesInfoList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -678,9 +704,10 @@ BTLEConnection::handleFindByType(uint8_t status, AttributeList& list, struct cal
     Local<Array> response = Array::New(list.size());
 
     size_t index = 0;
-    AttributeList::iterator iter = list.begin();
+    Att::HandlesInfoList::iterator iter = list.begin();
     while (iter != list.end()) {
-      response->Set(index++, getAttribute(*iter));
+      response->Set(index++, getHandlesInfo(*iter));
+      delete *iter;
       ++iter;
     }
     Persistent<Function> callback = static_cast<Function*>(cd->data);
@@ -696,15 +723,16 @@ BTLEConnection::handleFindByType(uint8_t status, AttributeList& list, struct cal
 // ReadByType callback
 
 void
-BTLEConnection::onReadByType(uint8_t status, void* data, AttributeList* list, const char* error)
+BTLEConnection::onReadByType(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  cd->conn->handleReadByType(status, *list, cd, error);
-  delete list;
+  Att::AttributeDataList* dataList = (Att::AttributeDataList*) list;
+  cd->conn->handleReadByType(status, *dataList, cd, error);
+  delete dataList;
 }
 
 void
-BTLEConnection::handleReadByType(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleReadByType(uint8_t status, Att::AttributeDataList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -713,9 +741,10 @@ BTLEConnection::handleReadByType(uint8_t status, AttributeList& list, struct cal
     Local<Array> response = Array::New(list.size());
 
     size_t index = 0;
-    AttributeList::iterator iter = list.begin();
+    Att::AttributeDataList::iterator iter = list.begin();
     while (iter != list.end()) {
-      response->Set(index++, getAttribute(*iter));
+      response->Set(index++, getAttributeData(*iter));
+      delete *iter;
       ++iter;
     }
     Persistent<Function> callback = static_cast<Function*>(cd->data);
@@ -731,15 +760,16 @@ BTLEConnection::handleReadByType(uint8_t status, AttributeList& list, struct cal
 // ReadByGroupType callback
 
 void
-BTLEConnection::onReadByGroupType(uint8_t status, void* data, AttributeList* list, const char* error)
+BTLEConnection::onReadByGroupType(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
-  cd->conn->handleReadByGroupType(status, *list, cd, error);
-  delete list;
+  Att::GroupAttributeDataList* dataList = (Att::GroupAttributeDataList*) list;
+  cd->conn->handleReadByGroupType(status, *dataList, cd, error);
+  delete dataList;
 }
 
 void
-BTLEConnection::handleReadByGroupType(uint8_t status, AttributeList& list, struct callbackData* cd, const char* error)
+BTLEConnection::handleReadByGroupType(uint8_t status, Att::GroupAttributeDataList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -748,9 +778,10 @@ BTLEConnection::handleReadByGroupType(uint8_t status, AttributeList& list, struc
     Local<Array> response = Array::New(list.size());
 
     size_t index = 0;
-    AttributeList::iterator iter = list.begin();
+    Att::GroupAttributeDataList::iterator iter = list.begin();
     while (iter != list.end()) {
-      response->Set(index++, getAttribute(*iter));
+      response->Set(index++, getGroupAttributeData(*iter));
+      delete *iter;
       ++iter;
     }
     Persistent<Function> callback = static_cast<Function*>(cd->data);
@@ -765,13 +796,15 @@ BTLEConnection::handleReadByGroupType(uint8_t status, AttributeList& list, struc
 
 // Read attribute callback
 bool
-BTLEConnection::onReadAttribute(uint8_t status, void* data, Attribute* attribute, const char* error)
+BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Persistent<Function> callback = static_cast<Function*>(cd->data);
   if (status == 0 && error == NULL) {
+    Buffer* buffer = Buffer::New(len);
+    memcpy(Buffer::Data(buffer), buf, len);
     const int argc = 2;
-    Local<Value> argv[argc] = { Local<Value>::New(Null()), getAttribute(attribute) };
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
     callback->Call(cd->conn->self, argc, argv);
     delete cd;
   } else {
@@ -786,13 +819,15 @@ BTLEConnection::onReadAttribute(uint8_t status, void* data, Attribute* attribute
 
 // Read notification callback
 bool
-BTLEConnection::onReadNotification(uint8_t status, void* data, Attribute* attribute, const char* error)
+BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Persistent<Function> callback = static_cast<Function*>(cd->data);
   if (status == 0 && error == NULL) {
+    Buffer* buffer = Buffer::New(len);
+    memcpy(Buffer::Data(buffer), buf, len);
     const int argc = 2;
-    Local<Value> argv[argc] = { Local<Value>::New(Null()), getAttribute(attribute) };
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
     callback->Call(cd->conn->self,  argc, argv);
     // NOTE: We don't delete cd here because we reuse it for the notifications
   } else {
