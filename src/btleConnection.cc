@@ -642,7 +642,10 @@ BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* erro
     Persistent<Function> callback = static_cast<Function*>(cd->data);
     const int argc = 2;
     const char* msg = error == NULL ? createErrorMessage(err) : error;
-    Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
+    Local<Object> ret = Object::New();
+    ret->Set(String::New("errorCode"), Integer::New(err));
+    ret->Set(String::New("errorMesssage"), String::New(msg));
+    Local<Value> argv[argc] = { ret, Local<Value>::New(Null()) };
     callback->Call(self, argc, argv);
     delete cd;
 }
