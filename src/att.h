@@ -56,7 +56,7 @@ public:
   typedef std::vector<struct GroupAttributeData*> GroupAttributeDataList;
 
   typedef void (*ErrorCallback)(void* data, const char* error);
-  typedef bool (*ReadAttributeCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  typedef void (*ReadAttributeCallback)(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   typedef void (*AttributeListCallback)(uint8_t status, void* data, void* list, const char* error);
 
   // Convert a device error code to a human-readable message
@@ -105,7 +105,7 @@ public:
 private:
   struct readData;
 
-  typedef bool (*ReadCallback)(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  typedef void (*ReadCallback)(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
   static void onRead(void* data, uint8_t* buf, int len, const char* error);
   void handleRead(void* data, uint8_t* buf, int read, const char* error);
@@ -129,24 +129,24 @@ private:
     uint8_t* buffer, size_t buflen, const uint8_t* value = NULL, size_t vlen = 0);
 
   void doFindInformation(handle_t startHandle, handle_t endHandle);
-  static bool onFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
-  bool handleFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, size_t len, const char* error);
+  static void onFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  void handleFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, size_t len, const char* error);
 
   void doFindByType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& type,
     const uint8_t* value, size_t vlen);
-  static bool onFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
-  bool handleFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  static void onFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  void handleFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
   void doReadByType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& uuid);
-  static bool onReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
-  bool handleReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  static void onReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  void handleReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
   void doReadByGroupType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& uuid);
-  static bool onReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
-  bool handleReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  static void onReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  void handleReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
-  static bool onReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
-  bool handleReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  static void onReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+  void handleReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
   void parseAttributeList(AttributeInfoList& list, uint8_t* buf, int len);
   void parseHandlesInformationList(HandlesInfoList& list, const bt_uuid_t& type, uint8_t* buf, int len);

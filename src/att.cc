@@ -219,40 +219,37 @@ Att::doFindInformation(handle_t startHandle, handle_t endHandle)
   connection->write(buf);
 }
 
-bool
+void
 Att::onFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleFindInfo(status, rd, buf, len, error);
 }
 
-bool
+void
 Att::handleFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, size_t len, const char* error)
 {
+  AttributeInfoList* list = attributeList;
+  void* data = rd->data;
   if (status == 0) {
     if (attributeList == NULL) attributeList = new AttributeInfoList();
     parseAttributeList(*attributeList, buf, len);
     if (attributeList->back()->handle < rd->handle) {
       doFindInformation(attributeList->back()->handle+1, rd->handle);
-      return false;
     } else {
-      rd->attrListCb(status, rd->data, attributeList, error);
+      removeCurrentRequest();
       attributeList = NULL;
-      return true;
+      rd->attrListCb(status, data, list, error);
     }
   } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
     // This means we've reached the end of the list
     // Note: Need to null out error string and status
-    rd->attrListCb(0, rd->data, attributeList, NULL);
     attributeList = NULL;
-    return true;
-  } else if (error) {
-    rd->attrListCb(status, rd->data, attributeList, error);
-    attributeList = NULL;
-    return true;
+    removeCurrentRequest();
+    rd->attrListCb(0, data, list, NULL);
   } else {
-    rd->attrListCb(status, rd->data, attributeList, error);
     attributeList = NULL;
-    return true;
+    removeCurrentRequest();
+    rd->attrListCb(status, data, list, error);
   }
 }
 
@@ -286,44 +283,42 @@ Att::doFindByType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& typ
   connection->write(buf);
 }
 
-bool
+void
 Att::onFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleFindByType(status, rd, buf, len, error);
 }
 
-bool
+void
 Att::handleFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
+  HandlesInfoList* list = handlesInfoList;
+  void* data = rd->data;
   if (status == 0) {
     if (handlesInfoList == NULL) handlesInfoList = new HandlesInfoList();
     parseHandlesInformationList(*handlesInfoList, rd->type, buf, len);
     if (handlesInfoList->back()->handle < rd->handle) {
       doFindByType(handlesInfoList->back()->handle+1, rd->handle, rd->type, rd->value, rd->vlen);
-      return false;
     } else {
-      rd->attrListCb(status, rd->data, handlesInfoList, error);
       handlesInfoList = NULL;
-      return true;
+      removeCurrentRequest();
+      rd->attrListCb(status, data, list, error);
     }
   } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
     if (handlesInfoList == NULL) {
-      rd->attrListCb(0, rd->data, NULL, getErrorString(status));
-      return true;
+      removeCurrentRequest();
+      rd->attrListCb(0, data, NULL, getErrorString(status));
     } else {
       // This means we've reached the end of the list
-      // Note: Need to null out error string and status
-      rd->attrListCb(0, rd->data, handlesInfoList, NULL);
       handlesInfoList = NULL;
-      return true;
+      removeCurrentRequest();
+      // Note: Need to null out error string and status
+      rd->attrListCb(0, data, list, NULL);
     }
-  } else if (error) {
-    rd->attrListCb(status, rd->data, handlesInfoList, error);
-    return true;
   } else {
-    rd->attrListCb(status, rd->data, handlesInfoList, error);
     handlesInfoList = NULL;
-    return true;
+    removeCurrentRequest();
+    rd->attrListCb(status, data, list, error);
   }
 }
 
@@ -352,23 +347,24 @@ Att::doReadByType(handle_t startHandle, handle_t endHandle, const bt_uuid_t& typ
   connection->write(buf);
 }
 
-bool
+void
 Att::onReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleReadByType(status, rd, buf, len, error);
 }
 
-bool
+void
 Att::handleReadByType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   AttributeDataList* attributeList = new AttributeDataList();
+  void* data = rd->data;
   if (error) {
-    rd->attrListCb(status, rd->data, attributeList, error);
-    return true;
+    removeCurrentRequest();
+    rd->attrListCb(status, data, attributeList, error);
   } else {
     parseAttributeDataList(*attributeList, rd->type, buf, len);
-    rd->attrListCb(status, rd->data, attributeList, error);
-    return true;
+    removeCurrentRequest();
+    rd->attrListCb(status, data, attributeList, error);
   }
 }
 
@@ -397,39 +393,37 @@ Att::doReadByGroupType(handle_t startHandle, handle_t endHandle, const bt_uuid_t
   connection->write(buf);
 }
 
-bool
+void
 Att::onReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
   return rd->att->handleReadByGroupType(status, rd, buf, len, error);
 }
 
-bool
+void
 Att::handleReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
+  GroupAttributeDataList* list = groupAttributeList;
+  void* data = rd->data;
   if (status == 0) {
     if (groupAttributeList == NULL) groupAttributeList = new GroupAttributeDataList();
     parseGroupAttributeDataList(*groupAttributeList, rd->type, buf, len);
     if (groupAttributeList->back()->handle < rd->handle) {
       doReadByGroupType(groupAttributeList->back()->handle+1, rd->handle, rd->type);
-      return false;
     } else {
-      rd->attrListCb(status, rd->data, groupAttributeList, error);
       groupAttributeList = NULL;
-      return true;
+      removeCurrentRequest();
+      rd->attrListCb(status, data, list, error);
     }
   } else if (status == ATT_ECODE_ATTR_NOT_FOUND) {
     // This means we've reached the end of the list
+    groupAttributeList = NULL;
+    removeCurrentRequest();
     // Note: Need to null out error string and status
-    rd->attrListCb(0, rd->data, groupAttributeList, NULL);
-    groupAttributeList = NULL;
-    return true;
-  } else if (error) {
-    rd->attrListCb(status, rd->data, groupAttributeList, error);
-    return true;
+    rd->attrListCb(0, data, list, NULL);
   } else {
-    rd->attrListCb(status, rd->data, groupAttributeList, error);
     groupAttributeList = NULL;
-    return true;
+    removeCurrentRequest();
+    rd->attrListCb(status, data, list, error);
   }
 }
 
@@ -454,11 +448,12 @@ Att::readAttribute(uint16_t handle, ReadAttributeCallback callback, void* data)
   }
 }
 
-bool
+void
 Att::onReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
 {
-  rd->readAttrCb(status, rd->data, buf, len, error);
-  return true;
+  void* data = rd->data;
+  rd->att->removeCurrentRequest();
+  rd->readAttrCb(status, data, buf, len, error);
 }
 
 //
@@ -685,8 +680,7 @@ void
 Att::callbackCurrentRequest(uint8_t status, uint8_t* buffer, size_t len, const char* error)
 {
   if (currentRequest->callback != NULL) {
-    bool remove = currentRequest->callback(status, currentRequest, buffer, len, error);
-    if (remove) removeCurrentRequest();
+    currentRequest->callback(status, currentRequest, buffer, len, error);
   }
 }
 

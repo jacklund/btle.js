@@ -46,8 +46,8 @@ protected:
   // Callbacks sent into att.cc
   static void onConnect(void* data, int status, int events);
   static void onClose(void* data);
-  static bool onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
-  static bool onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  static void onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
+  static void onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error);
   static void onWrite(void* data, const char* error);
   static void onFindInformation(uint8_t status, void* data, void* list, const char* error);
   static void onFindByType(uint8_t status, void* data, void* list, const char* error);

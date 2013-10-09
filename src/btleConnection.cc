@@ -795,7 +795,7 @@ BTLEConnection::handleReadByGroupType(uint8_t status, Att::GroupAttributeDataLis
 }
 
 // Read attribute callback
-bool
+void
 BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
@@ -813,12 +813,10 @@ BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int le
     Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
     callback->Call(cd->conn->self, argc, argv);
   }
-
-  return true;
 }
 
 // Read notification callback
-bool
+void
 BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
@@ -836,8 +834,6 @@ BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int
     Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
     callback->Call(cd->conn->self, argc, argv);
   }
-
-  return false;
 }
 
 // Write callback
