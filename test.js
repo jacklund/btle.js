@@ -17,18 +17,25 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     console.log("Got close");
   });
 
-  /*
-  //conn.discoverServices('0x1801', function(err, serviceList) {
-  //conn.discoverServices('f000ffc0-0451-4000-b000-000000000000', function(err, serviceList) {
-  conn.discoverServices(null, function(err, serviceList) {
+  //conn.findService('0x1801', function(err, serviceList) {
+  //conn.findService('f000ffc0-0451-4000-b000-000000000000', function(err, serviceList) {
+  conn.findService(null, function(err, serviceList) {
     if (err) {
       console.log(err);
     } else {
       console.log(serviceList);
+      //serviceList[0].findCharacteristics('0x2A00', function(err, list) {
+      serviceList[0].findCharacteristics(null, function(err, list) {
+        if (err) {
+          console.log(err);
+        } else {
+          console.log(list);
+        }
+      });
     }
   });
-  */
 
+/*
   conn.findInformation(0x0001, 0xffff, function(err, object) {
     if (err) {
       console.log("Got error: " + err);
@@ -37,7 +44,6 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     }
   });
 
-/*
   // Listen for notifications
   conn.addNotificationListener(0x25, function(err, value) {
     if (err) {
@@ -81,5 +87,5 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
       });
     }, 1000);
   });
-  */
+*/
 });
