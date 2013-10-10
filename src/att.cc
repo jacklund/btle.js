@@ -231,7 +231,7 @@ Att::handleFindInfo(uint8_t status, struct readData* rd, uint8_t* buf, size_t le
   AttributeInfoList* list = attributeList;
   void* data = rd->data;
   if (status == 0) {
-    if (attributeList == NULL) attributeList = new AttributeInfoList();
+    if (attributeList == NULL) list = attributeList = new AttributeInfoList();
     parseAttributeList(*attributeList, buf, len);
     if (attributeList->back()->handle < rd->handle) {
       doFindInformation(attributeList->back()->handle+1, rd->handle);
@@ -295,7 +295,7 @@ Att::handleFindByType(uint8_t status, struct readData* rd, uint8_t* buf, int len
   HandlesInfoList* list = handlesInfoList;
   void* data = rd->data;
   if (status == 0) {
-    if (handlesInfoList == NULL) handlesInfoList = new HandlesInfoList();
+    if (handlesInfoList == NULL) list = handlesInfoList = new HandlesInfoList();
     parseHandlesInformationList(*handlesInfoList, rd->type, buf, len);
     if (handlesInfoList->back()->handle < rd->handle) {
       doFindByType(handlesInfoList->back()->handle+1, rd->handle, rd->type, rd->value, rd->vlen);
@@ -405,7 +405,7 @@ Att::handleReadByGroupType(uint8_t status, struct readData* rd, uint8_t* buf, in
   GroupAttributeDataList* list = groupAttributeList;
   void* data = rd->data;
   if (status == 0) {
-    if (groupAttributeList == NULL) groupAttributeList = new GroupAttributeDataList();
+    if (groupAttributeList == NULL) list = groupAttributeList = new GroupAttributeDataList();
     parseGroupAttributeDataList(*groupAttributeList, rd->type, buf, len);
     if (groupAttributeList->back()->handle < rd->handle) {
       doReadByGroupType(groupAttributeList->back()->handle+1, rd->handle, rd->type);

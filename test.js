@@ -1,4 +1,5 @@
 var btle = require('./index');
+var util = require('util');
 
 // Connect
 btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
@@ -25,11 +26,11 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     } else {
       console.log(serviceList);
       //serviceList[0].findCharacteristics('0x2A00', function(err, list) {
-      serviceList[0].findCharacteristics(null, function(err, list) {
+      serviceList[3].findCharacteristics(null, function(err, list) {
         if (err) {
           console.log(err);
         } else {
-          console.log(list);
+          console.log(util.inspect(list, {depth: null}));
         }
       });
     }
