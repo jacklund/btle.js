@@ -1,4 +1,5 @@
 var btle = require('./index');
+var device = require('./lib/device');
 var util = require('util');
 
 // Connect
@@ -18,6 +19,11 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     console.log("Got close");
   });
 
+  device.createDevice(conn, 'BC:6A:29:C3:52:A9', function(err, device) {
+    console.log(device);
+  });
+
+  /*
   //conn.findService('0x1801', function(err, serviceList) {
   //conn.findService('f000ffc0-0451-4000-b000-000000000000', function(err, serviceList) {
   conn.findService(null, function(err, serviceList) {
@@ -36,7 +42,6 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     }
   });
 
-/*
   conn.findInformation(0x0001, 0xffff, function(err, object) {
     if (err) {
       console.log("Got error: " + err);
