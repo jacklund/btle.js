@@ -644,7 +644,7 @@ BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* erro
     const char* msg = error == NULL ? createErrorMessage(err) : error;
     Local<Object> ret = Object::New();
     ret->Set(String::New("errorCode"), Integer::New(err));
-    ret->Set(String::New("errorMesssage"), String::New(msg));
+    ret->Set(String::New("errorMessage"), String::New(msg));
     Local<Value> argv[argc] = { ret, Local<Value>::New(Null()) };
     callback->Call(self, argc, argv);
     delete cd;

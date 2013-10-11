@@ -3,30 +3,33 @@ var device = require('./lib/device');
 var util = require('util');
 
 // Connect
-btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
+device.connect('BC:6A:29:C3:52:A9', function(err, device) {
   process.on('SIGINT', function() {
-    conn.close();
+    device.close();
   });
 
+  if (err) {
+    console.log(err);
+    return;
+  }
+
   // Register an error callback
-  conn.on('error', function(err) {
+  device.on('error', function(err) {
     console.error("Connection error: %s", err);
-    conn.close();
+    device.close();
   });
 
   // Register a close callback
-  conn.on('close', function() {
+  device.on('close', function() {
     console.log("Got close");
   });
 
-  device.createDevice(conn, 'BC:6A:29:C3:52:A9', function(err, device) {
-    console.log(device);
-  });
+  console.log(device);
 
   /*
-  //conn.findService('0x1801', function(err, serviceList) {
-  //conn.findService('f000ffc0-0451-4000-b000-000000000000', function(err, serviceList) {
-  conn.findService(null, function(err, serviceList) {
+  //device.findService('0x1801', function(err, serviceList) {
+  //device.findService('f000ffc0-0451-4000-b000-000000000000', function(err, serviceList) {
+  device.findService(null, function(err, serviceList) {
     if (err) {
       console.log(err);
     } else {
@@ -42,16 +45,17 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     }
   });
 
-  conn.findInformation(0x0001, 0xffff, function(err, object) {
+  device.findInformation(0x0001, 0xffff, function(err, object) {
     if (err) {
       console.log("Got error: " + err);
     } else {
       console.log(object);
     }
   });
+  */
 
   // Listen for notifications
-  conn.addNotificationListener(0x25, function(err, value) {
+  device.addNotificationListener(0x25, function(err, value) {
     if (err) {
       console.log("Notification error: " + err);
     } else {
@@ -59,7 +63,7 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
     }
   });
 
-  conn.addNotificationListener(0x2D, function(err, value) {
+  device.addNotificationListener(0x2D, function(err, value) {
     if (err) {
       console.log("Notification error: " + err);
     } else {
@@ -68,7 +72,7 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
   });
 
   // Read from handle 0x25
-  conn.readHandle(0x25, function(err, value) {
+  device.readHandle(0x25, function(err, value) {
     if (err) {
       console.log("Error: " + err);
     } else {
@@ -77,21 +81,20 @@ btle.connect('BC:6A:29:C3:52:A9', function(err, conn) {
 
     // Write a 1 to handle 0x29 to turn on the thermometer
     var buffer = new Buffer([1]);
-    conn.writeCommand(0x29, buffer);
+    device.writeCommand(0x29, buffer);
 
     // Wait for a second then read handle 0x25 again
     setTimeout(function() {
-      conn.readHandle(0x25, function(err, attrib) {
+      device.readHandle(0x25, function(err, attrib) {
         console.log(attrib);
 
         // Write 0100 to handle 0x26
         buffer = new Buffer([1, 0]);
-        conn.writeCommand(0x26, buffer);
+        device.writeCommand(0x26, buffer);
 
-        conn.writeCommand(0x31, new Buffer([1])); // Turn on accelerometer
-        conn.writeCommand(0x2E, buffer);
+        device.writeCommand(0x31, new Buffer([1])); // Turn on accelerometer
+        device.writeCommand(0x2E, buffer);
       });
     }, 1000);
   });
-*/
 });
