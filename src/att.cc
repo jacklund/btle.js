@@ -375,6 +375,8 @@ void
 Att::readByGroupType(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& type,
     AttributeListCallback callback, void* data)
 {
+  char buffer[128];
+  bt_uuid_to_string(&type, buffer, sizeof(buffer));
   if (setCurrentRequest(ATT_OP_READ_BY_GROUP_REQ, ATT_OP_READ_BY_GROUP_RESP, data, endHandle, &type, onReadByGroupType, callback)) {
     doReadByGroupType(startHandle, endHandle, type);
   } else {
