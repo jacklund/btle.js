@@ -1,7 +1,7 @@
 var assert = require('assert');
 var btle = require('../index');
 var device = require('../lib/device');
-var tester = require('../tester');
+var tester = require('test.js');
 
 // Setup
 device.connect('BC:6A:29:C3:52:A9', function(err, device) {
