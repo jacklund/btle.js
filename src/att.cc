@@ -205,7 +205,9 @@ Att::findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCall
   if (setCurrentRequest(ATT_OP_FIND_INFO_REQ, ATT_OP_FIND_INFO_RESP, data, endHandle, NULL, onFindInfo, callback)) {
     doFindInformation(startHandle, endHandle);
   } else {
-    callback(0, data, NULL, "Request already pending");
+    char buffer[128];
+    sprintf(buffer, "Request already pending: %s", getOpcodeName(currentRequest->request));
+    callback(0, data, NULL, buffer);
   }
 }
 
@@ -267,7 +269,9 @@ Att::findByTypeValue(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& 
         &type, onFindByType, callback, value, vlen)) {
     doFindByType(startHandle, endHandle, type, value, vlen);
   } else {
-    callback(0, data, NULL, "Request already pending");
+    char buffer[128];
+    sprintf(buffer, "Request already pending: %s", getOpcodeName(currentRequest->request));
+    callback(0, data, NULL, buffer);
   }
 }
 
@@ -332,7 +336,9 @@ Att::readByType(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& type,
   if (setCurrentRequest(ATT_OP_READ_BY_TYPE_REQ, ATT_OP_READ_BY_TYPE_RESP, data, endHandle, &type, onReadByType, callback)) {
     doReadByType(startHandle, endHandle, type);
   } else {
-    callback(0, data, NULL, "Request already pending");
+    char buffer[128];
+    sprintf(buffer, "Request already pending: %s", getOpcodeName(currentRequest->request));
+    callback(0, data, NULL, buffer);
   }
 }
 
@@ -380,7 +386,9 @@ Att::readByGroupType(uint16_t startHandle, uint16_t endHandle, const bt_uuid_t& 
   if (setCurrentRequest(ATT_OP_READ_BY_GROUP_REQ, ATT_OP_READ_BY_GROUP_RESP, data, endHandle, &type, onReadByGroupType, callback)) {
     doReadByGroupType(startHandle, endHandle, type);
   } else {
-    callback(0, data, NULL, "Request already pending");
+    char buffer[128];
+    sprintf(buffer, "Request already pending: %s", getOpcodeName(currentRequest->request));
+    callback(0, data, NULL, buffer);
   }
 }
 
@@ -446,7 +454,9 @@ Att::readAttribute(uint16_t handle, ReadAttributeCallback callback, void* data)
     buf.len = len;
     connection->write(buf);
   } else {
-    callback(0, data, NULL, 0, "Request already pending");
+    char buffer[128];
+    sprintf(buffer, "Request already pending: %s", getOpcodeName(currentRequest->request));
+    callback(0, data, NULL, 0, buffer);
   }
 }
 
