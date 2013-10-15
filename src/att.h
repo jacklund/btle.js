@@ -148,6 +148,8 @@ private:
   static void onReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
   void handleReadAttribute(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
 
+  static void onNotification(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error);
+
   void parseAttributeList(AttributeInfoList& list, uint8_t* buf, int len);
   void parseHandlesInformationList(HandlesInfoList& list, const bt_uuid_t& type, uint8_t* buf, int len);
   void parseAttributeDataList(AttributeDataList& list, const bt_uuid_t& type, uint8_t* buf, int len);

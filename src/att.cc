@@ -483,12 +483,19 @@ Att::listenForNotifications(uint16_t handle, ReadAttributeCallback callback, voi
   rd->att = this;
   rd->data = data;
   rd->handle = handle;
-  rd->callback = onReadAttribute;
+  rd->callback = onNotification;
   rd->readAttrCb = callback;
   {
     LockGuard(this->notificationMapLock);
     notificationMap.insert(std::pair<handle_t, struct readData*>(handle, rd));
   }
+}
+
+void
+Att::onNotification(uint8_t status, struct readData* rd, uint8_t* buf, int len, const char* error)
+{
+  void* data = rd->data;
+  rd->readAttrCb(status, data, buf, len, error);
 }
 
 //
