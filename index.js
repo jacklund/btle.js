@@ -4,7 +4,7 @@
  * MIT Licensed
  */
 
-module.exports = require('./lib/btle');
+module.exports = require('./lib/device');
 
 /*
 module.exports.connect = module.exports.createConnection = function (address, openListener) {
