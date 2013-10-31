@@ -86,7 +86,7 @@ The API docs are [here](https://github.com/jacklund/btle.js/wiki/API-Docs).
         if (err) {
           console.log("Notification error: " + err);
         } else {
-          console.log("Temperature, " + attrib.value.readUInt16LE(0) + ", " + attrib.value.readUInt16LE(2));
+          console.log("Temperature, " + attrib.readUInt16LE(0) + ", " + attrib.readUInt16LE(2));
         }
       });
 
