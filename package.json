@@ -1,6 +1,6 @@
 {
   "name": "btle.js",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Native Bluetooth LE Node.js module for Linux",
   "main": "index.js",
   "scripts": {
