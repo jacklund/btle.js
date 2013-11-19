@@ -102,7 +102,7 @@ ServerInterface::onConnect(void* data, int status, int events)
     serverInterface->server->setCloseCallback(onClose, (void*) serverInterface);
     // Call the provided callback
     const int argc = 1;
-    Local<Value> argv[argc] = { Local<Value>::New(Null()) };
+    Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(serverInterface->self) };
     serverInterface->connectionCallback->Call(serverInterface->self, argc, argv);
   } else {
     // Call the provided callback with the error
