@@ -5,6 +5,7 @@
 #include "connection.h"
 #include "btio.h"
 #include "btleException.h"
+#include "serverInterface.h"
 #include "util.h"
 
 using namespace v8;
@@ -37,14 +38,22 @@ BTLEConnection::~BTLEConnection()
 
 // Node.js initialization
 void
-BTLEConnection::Init()
+BTLEConnection::Init(Handle<Object> exports)
 {
-  // Prepare constructor template
-  Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-  tpl->SetClassName(String::NewSymbol("Connection"));
-  tpl->InstanceTemplate()->SetInternalFieldCount(4);
+  Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
+  t->InstanceTemplate()->SetInternalFieldCount(2);
+  t->SetClassName(String::New("BTLEConnection"));
+  NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
+  NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
+  NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", BTLEConnection::FindByTypeValue);
+  NODE_SET_PROTOTYPE_METHOD(t, "readByType", BTLEConnection::ReadByType);
+  NODE_SET_PROTOTYPE_METHOD(t, "readByGroupType", BTLEConnection::ReadByGroupType);
+  NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
+  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
+  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
+  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
 
-  constructor = Persistent<Function>::New(tpl->GetFunction());
+  exports->Set(String::NewSymbol("Connection"), t->GetFunction());
 }
 
 // Node.js new object construction
@@ -909,20 +918,8 @@ BTLEConnection::onError(void* data, const char* error)
 // Node.js initialization
 extern "C" void init(Handle<Object> exports)
 {
-  Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
-  t->InstanceTemplate()->SetInternalFieldCount(2);
-  t->SetClassName(String::New("BTLEConnection"));
-  NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
-  NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
-  NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", BTLEConnection::FindByTypeValue);
-  NODE_SET_PROTOTYPE_METHOD(t, "readByType", BTLEConnection::ReadByType);
-  NODE_SET_PROTOTYPE_METHOD(t, "readByGroupType", BTLEConnection::ReadByGroupType);
-  NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
-  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
-  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
-  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
-
-  exports->Set(String::NewSymbol("Connection"), t->GetFunction());
+  BTLEConnection::Init(exports);
+  ServerInterface::Init(exports);
 }
 
 NODE_MODULE(btle, init)

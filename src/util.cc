@@ -55,6 +55,13 @@ bool getSourceAddr(Handle<String> key, Local<Object> options, struct set_opts& o
 
 bool setOpts(struct set_opts& opts, Local<String> destination, Local<Object> options)
 {
+  str2ba(getStringValue(destination), &opts.dst);
+
+  return setOpts(opts, options);
+}
+
+bool setOpts(struct set_opts& opts, Local<Object> options)
+{
   memset((void*) &opts, 0, sizeof(opts));
 
   /* Set defaults */
@@ -75,8 +82,6 @@ bool setOpts(struct set_opts& opts, Local<String> destination, Local<Object> opt
   } else {
 		bacpy(&opts.src, BDADDR_ANY);
   }
-
-  str2ba(getStringValue(destination), &opts.dst);
 
   key = getKey("type");
   if (options->Has(key)) {

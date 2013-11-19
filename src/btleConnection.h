@@ -16,7 +16,7 @@ public:
   virtual ~BTLEConnection();
 
   // Node.js initialization
-  static void Init();
+  static void Init(v8::Handle<v8::Object> exports);
 
   // Methods which translate to methods on the node.js object
   static v8::Handle<v8::Value> New(const v8::Arguments& args);
