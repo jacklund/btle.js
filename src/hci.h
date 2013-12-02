@@ -19,7 +19,7 @@ public:
 
   // Node.js stuff
   static void Init(v8::Handle<v8::Object> exports);
-  static v8::Handle<v8::Value> New(const v8::Arguments& args)
+  static v8::Handle<v8::Value> New(const v8::Arguments& args);
   static v8::Handle<v8::Value> StartAdvertising(const v8::Arguments& args);
   static v8::Handle<v8::Value> StopAdvertising(const v8::Arguments& args);
 
@@ -37,6 +37,8 @@ private:
   bool socketClosed;
   struct hci_dev_info hciDevInfo;
   bool isAdvertising;
+
+  v8::Handle<v8::Object> self;
 };
 
 #endif

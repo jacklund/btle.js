@@ -273,4 +273,6 @@ HCI::Init(Handle<Object> exports)
   t->SetClassName(String::New("HCI"));
   NODE_SET_PROTOTYPE_METHOD(t, "startAdvertising", HCI::StartAdvertising);
   NODE_SET_PROTOTYPE_METHOD(t, "stopAdvertising", HCI::StopAdvertising);
+
+  exports->Set(String::NewSymbol("HCI"), t->GetFunction());
 }
