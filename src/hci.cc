@@ -115,6 +115,18 @@ HCI::StartAdvertising(const Arguments& args)
   return scope.Close(Undefined());
 }
 
+Handle<Value>
+HCI::StopAdvertising(const Arguments& args)
+{
+  HandleScope scope;
+
+  HCI* hci = ObjectWrap::Unwrap<HCI>(args.This());
+
+  hci->stopAdvertising();
+
+  return scope.Close(Undefined());
+}
+
 int
 HCI::getHCISocket()
 {
@@ -219,13 +231,13 @@ HCI::setAdvertisingData(uint8_t* data, uint8_t length)
 void
 HCI::startAdvertising(uint8_t* data, uint8_t length)
 {
-  if (isAdvertising) {
-    stopAdvertising();
-  }
+  stopAdvertising();
 
   setAdvertisingData(data, length);
 
   hci_le_set_advertise_enable(getHCISocket(), 1, DEFAULT_TIMEOUT);
+
+  isAdvertising = true;
 }
 
 void
@@ -233,6 +245,7 @@ HCI::stopAdvertising()
 {
   if (isAdvertising) {
     hci_le_set_advertise_enable(getHCISocket(), 0, DEFAULT_TIMEOUT);
+    isAdvertising = false;
   }
 }
 
@@ -242,4 +255,6 @@ HCI::Init(Handle<Object> exports)
 {
   exports->Set(String::NewSymbol("startAdvertising"),
       FunctionTemplate::New(StartAdvertising)->GetFunction());
+  exports->Set(String::NewSymbol("stopAdvertising"),
+      FunctionTemplate::New(StopAdvertising)->GetFunction());
 }
