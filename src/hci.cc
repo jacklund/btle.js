@@ -1,6 +1,9 @@
+#include <sys/ioctl.h>
+#include <sys/errno.h>
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
+#include <node_buffer.h>
 
 #include "hci.h"
 #include "util.h"
@@ -12,7 +15,7 @@ using namespace v8;
 using namespace node;
 
 HCI::HCI()
-: hciSocket(-1), state(DOWN), socketClosed(true), isAdvertising(false)
+: hciSocket(-1), state(HCI_STATE_DOWN), socketClosed(true), isAdvertising(false)
 {
   memset(&this->hciDevInfo, 0, sizeof(this->hciDevInfo));
 }
@@ -22,7 +25,7 @@ HCI::~HCI()
 }
 
 int
-HCI::getAdvType(Local<Value>& arg)
+HCI::getAdvType(Local<Value> arg)
 {
   Local<Object> options = arg->ToObject();
   Handle<String> key = getKey("advType");
@@ -30,15 +33,16 @@ HCI::getAdvType(Local<Value>& arg)
     Local<Value> value = options->Get(key);
     if (!value->IsNumber()) {
       ThrowException(Exception::TypeError(String::New("advType option must be integer")));
-      return scope.Close(Undefined());
     }
-    return getIntValue(value);
+    int val;
+    getIntValue(value->ToNumber(), val);
+    return val;
   }
 
   return 0;
 }
 
-void
+Handle<Value>
 HCI::StartAdvertising(const Arguments& args)
 {
   HandleScope scope;
@@ -55,7 +59,7 @@ HCI::StartAdvertising(const Arguments& args)
     len = strlen(charData);
     data = new uint8_t[len];
     memcpy(data, charData, len);
-  } else if (Buffer.HasInstance(args[0])) {
+  } else if (Buffer::HasInstance(args[0])) {
     len = Buffer::Length(args[0]);
     data = (uint8_t*) Buffer::Data(args[0]);
   } else {
@@ -67,15 +71,15 @@ HCI::StartAdvertising(const Arguments& args)
   uint8_t* scanRespData = NULL;
   int advType = 0;
   if (args.Length() > 1) {
-    if (args[1]->IsString() || Buffer.HasInstance(args[1])) {
+    if (args[1]->IsString() || Buffer::HasInstance(args[1])) {
       if (args[1]->IsString()) {
         const char* charData = getStringValue(args[1]->ToString());
         scanRespLen = strlen(charData);
         scanRespData = new uint8_t[scanRespLen];
         memcpy(scanRespData, charData, scanRespLen);
-      } else if (Buffer.HasInstance(args[1])) {
+      } else if (Buffer::HasInstance(args[1])) {
         scanRespLen = Buffer::Length(args[1]);
-        scanRespData = Buffer::Data(args[1]);
+        scanRespData = (uint8_t*) Buffer::Data(args[1]);
       }
       if (args.Length() > 2) {
         if (args[2]->IsObject()) {
@@ -94,17 +98,19 @@ HCI::StartAdvertising(const Arguments& args)
     }
   }
 
+  HCI* hci = ObjectWrap::Unwrap<HCI>(args.This());
+
   if (advType != 0) {
     le_set_advertising_parameters_cp params;
     memset(&params, 0, sizeof(params));
     params.min_interval = htobs(0x0800);
     params.max_interval = htobs(0x0800);
     params.chan_map = 7;
-    params.adv_type = advType;
-    setAdvertisingParameters(params);
+    params.advtype = advType;
+    hci->setAdvertisingParameters(params);
   }
 
-  startAdvertising(data, (uint8_t) len);
+  hci->startAdvertising(data, (uint8_t) len);
 
   return scope.Close(Undefined());
 }
@@ -132,7 +138,7 @@ HCI::getHCISocket()
   return this->hciSocket;
 }
 
-HCIState
+HCI::HCIState
 HCI::getAdapterState()
 {
   if (!hci_test_bit(HCI_STATE_UP, &this->hciDevInfo.flags)) {

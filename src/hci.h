@@ -3,8 +3,7 @@
 
 #include <node.h>
 
-class HCI
-{
+class HCI : node::ObjectWrap {
 public:
   enum HCIState {
     HCI_STATE_DOWN,
@@ -18,11 +17,11 @@ public:
   virtual ~HCI();
 
   // Node.js stuff
-  static void Init(Handle<Object> exports);
-  static void StartAdvertising(const Arguments& args);
+  static void Init(v8::Handle<v8::Object> exports);
+  static v8::Handle<v8::Value>  StartAdvertising(const v8::Arguments& args);
 
 private:
-  int getAdvType(Local<Value>& arg);
+  static int getAdvType(v8::Local<v8::Value> arg);
   int getHCISocket();
   HCIState getAdapterState();
   void setAdvertisingParameters(le_set_advertising_parameters_cp& params);
