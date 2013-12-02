@@ -42,6 +42,21 @@ HCI::getAdvType(Local<Value> arg)
   return 0;
 }
 
+// Node.js new object construction
+Handle<Value>
+HCI::New(const Arguments& args)
+{
+  HandleScope scope;
+
+  assert(args.IsConstructCall());
+
+  HCI* hci = new HCI();
+  hci->self = Persistent<Object>::New(args.This());
+  hci->Wrap(args.This());
+
+  return scope.Close(args.This());
+}
+
 Handle<Value>
 HCI::StartAdvertising(const Arguments& args)
 {
