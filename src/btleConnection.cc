@@ -6,6 +6,7 @@
 #include "btio.h"
 #include "btleException.h"
 #include "serverInterface.h"
+#include "hci.h"
 #include "util.h"
 
 using namespace v8;

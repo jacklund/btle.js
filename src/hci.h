@@ -2,6 +2,7 @@
 #define HCI_H
 
 #include <node.h>
+#include <bluetooth/hci.h>
 
 class HCI : node::ObjectWrap {
 public:

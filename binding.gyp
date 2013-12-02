@@ -8,6 +8,7 @@
         "src/btleException.cc",
         "src/btleConnection.cc",
         "src/connection.cc",
+        "src/hci.cc",
         "src/server.cc",
         "src/serverInterface.cc",
         "src/util.cc"
