@@ -920,6 +920,7 @@ extern "C" void init(Handle<Object> exports)
 {
   BTLEConnection::Init(exports);
   ServerInterface::Init(exports);
+  HCI::Init(exports);
 }
 
 NODE_MODULE(btle, init)
