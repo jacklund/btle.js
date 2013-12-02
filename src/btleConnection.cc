@@ -42,7 +42,7 @@ void
 BTLEConnection::Init(Handle<Object> exports)
 {
   Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
-  t->InstanceTemplate()->SetInternalFieldCount(2);
+  t->InstanceTemplate()->SetInternalFieldCount(1);
   t->SetClassName(String::New("BTLEConnection"));
   NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
   NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);

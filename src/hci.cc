@@ -268,8 +268,9 @@ HCI::stopAdvertising()
 void
 HCI::Init(Handle<Object> exports)
 {
-  exports->Set(String::NewSymbol("startAdvertising"),
-      FunctionTemplate::New(StartAdvertising)->GetFunction());
-  exports->Set(String::NewSymbol("stopAdvertising"),
-      FunctionTemplate::New(StopAdvertising)->GetFunction());
+  Local<FunctionTemplate> t = FunctionTemplate::New(HCI::New);
+  t->InstanceTemplate()->SetInternalFieldCount(1);
+  t->SetClassName(String::New("HCI"));
+  NODE_SET_PROTOTYPE_METHOD(t, "startAdvertising", HCI::StartAdvertising);
+  NODE_SET_PROTOTYPE_METHOD(t, "stopAdvertising", HCI::StopAdvertising);
 }
