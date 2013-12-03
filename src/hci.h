@@ -24,8 +24,10 @@ public:
   static v8::Handle<v8::Value> StopAdvertising(const v8::Arguments& args);
 
 private:
+  v8::Local<v8::String> errnoMessage(const char* msg);
   static int getAdvType(v8::Local<v8::Value> arg);
   int getHCISocket();
+  void closeHCISocket();
   HCIState getAdapterState();
   void setAdvertisingParameters(le_set_advertising_parameters_cp& params);
   void setAdvertisingData(uint8_t* data, uint8_t length);
