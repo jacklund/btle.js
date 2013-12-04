@@ -68,64 +68,112 @@ HCI::StartAdvertising(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  uint8_t* data;
-  size_t len;
-  if (args[0]->IsString()) {
-    const char* charData = getStringValue(args[0]->ToString());
-    len = strlen(charData);
-    data = new uint8_t[len];
-    memcpy(data, charData, len);
-  } else if (Buffer::HasInstance(args[0])) {
-    len = Buffer::Length(args[0]);
-    data = (uint8_t*) Buffer::Data(args[0]);
-  } else {
-    ThrowException(Exception::TypeError(String::New("Data must be a string or a Buffer")));
-    return scope.Close(Undefined());
-  }
-
-  size_t scanRespLen = 0;
-  uint8_t* scanRespData = NULL;
-  int advType = 0;
-  if (args.Length() > 1) {
-    if (args[1]->IsString() || Buffer::HasInstance(args[1])) {
-      if (args[1]->IsString()) {
-        const char* charData = getStringValue(args[1]->ToString());
-        scanRespLen = strlen(charData);
-        scanRespData = new uint8_t[scanRespLen];
-        memcpy(scanRespData, charData, scanRespLen);
-      } else if (Buffer::HasInstance(args[1])) {
-        scanRespLen = Buffer::Length(args[1]);
-        scanRespData = (uint8_t*) Buffer::Data(args[1]);
-      }
-      if (args.Length() > 2) {
-        if (args[2]->IsObject()) {
-          advType = getAdvType(args[2]);
-        }
-      }
-    } else if (args[1]->IsObject()) {
-      if (args.Length() > 2) {
-        ThrowException(Exception::TypeError(String::New("Second parameter must be a string or a Buffer")));
-        return scope.Close(Undefined());
-      }
-      advType = getAdvType(args[1]);
-    } else {
-      ThrowException(Exception::TypeError(String::New("Second parameter must be a string or a Buffer, or an Object")));
+  Local<Object> options;
+  uint8_t* data = NULL;
+  size_t len = 0;
+  uint8_t* scanData = NULL;
+  size_t scanLen = 0;
+  if (args[0]->IsObject()) {
+    if (args.Length() < 2) {
+      ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
       return scope.Close(Undefined());
     }
+    options = args[0]->ToObject();
+    if (args.Length() > 1) {
+      if (Buffer::HasInstance(args[1])) {
+        data = (uint8_t*) Buffer::Data(args[1]);
+        len = Buffer::Length(args[1]);
+      } else {
+        ThrowException(Exception::TypeError(String::New("Second parameter must be a Buffer")));
+        return scope.Close(Undefined());
+      }
+      if (args.Length() > 2) {
+        if (Buffer::HasInstance(args[2])) {
+          scanData = (uint8_t*) Buffer::Data(args[2]);
+          scanLen = Buffer::Length(args[2]);
+        } else {
+          ThrowException(Exception::TypeError(String::New("Third parameter must be a Buffer")));
+          return scope.Close(Undefined());
+        }
+      }
+    }
+  } else if (Buffer::HasInstance(args[0])) {
+    data = (uint8_t*) Buffer::Data(args[0]);
+    len = Buffer::Length(args[0]);
+    if (args.Length() > 1) {
+      if (Buffer::HasInstance(args[1])) {
+        scanData = (uint8_t*) Buffer::Data(args[1]);
+        scanLen = Buffer::Length(args[1]);
+      } else {
+        ThrowException(Exception::TypeError(String::New("Second parameter must be a Buffer")));
+        return scope.Close(Undefined());
+      }
+    }
+  } else {
+    ThrowException(Exception::TypeError(String::New("First parameter must be an object, or a buffer")));
+    return scope.Close(Undefined());
   }
 
   HCI* hci = ObjectWrap::Unwrap<HCI>(args.This());
 
-  if (advType != 0) {
+  if (!options.IsEmpty()) {
     le_set_advertising_parameters_cp params;
     memset(&params, 0, sizeof(params));
-    params.min_interval = htobs(0x0800);
-    params.max_interval = htobs(0x0800);
-    params.chan_map = 7;
-    params.advtype = advType;
+    Handle<String> key = getKey("advType");
+    if (options->Has(key)) {
+      Local<Value> value = options->Get(key);
+      if (!value->IsNumber()) {
+        ThrowException(Exception::TypeError(String::New("advType option must be integer")));
+      }
+      int val;
+      getIntValue(value->ToNumber(), val);
+      if (val < 0 || val > 3) {
+        ThrowException(Exception::TypeError(String::New("advType option must be between 0 and 3")));
+      }
+      params.advtype = val;
+    } else {
+      params.advtype = 0;
+    }
+    key = getKey("minInterval");
+    if (options->Has(key)) {
+      Local<Value> value = options->Get(key);
+      if (!value->IsNumber()) {
+        ThrowException(Exception::TypeError(String::New("minInterval option must be integer")));
+      }
+      int val;
+      getIntValue(value->ToNumber(), val);
+      params.min_interval = htobs(val);
+    } else {
+      params.min_interval = htobs(0x0800);
+    }
+    key = getKey("maxInterval");
+    if (options->Has(key)) {
+      Local<Value> value = options->Get(key);
+      if (!value->IsNumber()) {
+        ThrowException(Exception::TypeError(String::New("maxInterval option must be integer")));
+      }
+      int val;
+      getIntValue(value->ToNumber(), val);
+      params.max_interval = htobs(val);
+    } else {
+      params.max_interval = htobs(0x0800);
+    }
+    key = getKey("chanMap");
+    if (options->Has(key)) {
+      Local<Value> value = options->Get(key);
+      if (!value->IsNumber()) {
+        ThrowException(Exception::TypeError(String::New("chanMap option must be integer")));
+      }
+      int val;
+      getIntValue(value->ToNumber(), val);
+      params.chan_map = val;
+    }
     hci->setAdvertisingParameters(params);
   }
 
+  if (scanData) {
+    hci->setScanResponseData(scanData, scanLen);
+  }
   hci->startAdvertising(data, (uint8_t) len);
 
   return scope.Close(Undefined());
@@ -219,6 +267,11 @@ HCI::setAdvertisingParameters(le_set_advertising_parameters_cp& params)
 void
 HCI::setAdvertisingData(uint8_t* data, uint8_t length)
 {
+  printf("Advertising data:\n");
+  for (uint8_t i = 0; i < length; ++i) {
+    printf("%02x ", data[i]);
+  }
+  printf("\n");
   int timeout = DEFAULT_TIMEOUT;
 
   le_set_advertising_data_cp cp;
@@ -246,15 +299,49 @@ HCI::setAdvertisingData(uint8_t* data, uint8_t length)
 }
 
 void
+HCI::setScanResponseData(uint8_t* data, uint8_t length)
+{
+  printf("Scan response data:\n");
+  for (uint8_t i = 0; i < length; ++i) {
+    printf("%02x ", data[i]);
+  }
+  printf("\n");
+  int timeout = DEFAULT_TIMEOUT;
+
+  le_set_scan_response_data_cp cp;
+  memset(&cp, 0, sizeof(cp));
+  cp.length = length;
+  memcpy(&cp.data, data, length);
+
+  struct hci_request rq;
+  uint8_t status;
+  memset(&rq, 0, sizeof(rq));
+  rq.ogf = OGF_LE_CTL;
+  rq.ocf = OCF_LE_SET_SCAN_RESPONSE_DATA;
+  rq.cparam = &cp;
+  rq.clen = LE_SET_SCAN_RESPONSE_DATA_CP_SIZE;
+  rq.rparam = &status;
+  rq.rlen = 1;
+
+  if (hci_send_req(getHCISocket(), &rq, timeout) < 0) {
+    ThrowException(Exception::Error(errnoMessage("Error setting advertising data")));
+  }
+
+  if (status) {
+    ThrowException(Exception::Error(errnoMessage("Error setting advertising data")));
+  }
+}
+
+void
 HCI::startAdvertising(uint8_t* data, uint8_t length)
 {
   stopAdvertising();
 
-  setAdvertisingData(data, length);
-
   if (hci_le_set_advertise_enable(getHCISocket(), 1, DEFAULT_TIMEOUT) < 0) {
     ThrowException(Exception::Error(errnoMessage("Error enabling advertising")));
   }
+
+  setAdvertisingData(data, length);
 
   isAdvertising = true;
 }

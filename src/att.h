@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <map>
 #include <vector>
-#include <bluetooth/uuid.h>
+#include "uuid.h"
 
 #include "connection.h"
 

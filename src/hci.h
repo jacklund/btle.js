@@ -31,6 +31,7 @@ private:
   HCIState getAdapterState();
   void setAdvertisingParameters(le_set_advertising_parameters_cp& params);
   void setAdvertisingData(uint8_t* data, uint8_t length);
+  void setScanResponseData(uint8_t* data, uint8_t length);
   void startAdvertising(uint8_t* data, uint8_t length);
   void stopAdvertising();
 

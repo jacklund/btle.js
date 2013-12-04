@@ -33,7 +33,7 @@
 #include <stdbool.h>
 #include <uv.h>
 #include <bluetooth/bluetooth.h>
-#include <bluetooth/uuid.h>
+#include "uuid.h"
 
 #ifdef __cplusplus
 extern "C" {
