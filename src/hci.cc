@@ -73,12 +73,12 @@ HCI::StartAdvertising(const Arguments& args)
   size_t len = 0;
   uint8_t* scanData = NULL;
   size_t scanLen = 0;
-  if (args[0]->IsObject()) {
+  if (args[0]->IsObject() || args[0]->IsNull()) {
     if (args.Length() < 2) {
       ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
       return scope.Close(Undefined());
     }
-    options = args[0]->ToObject();
+    if (!args[0]->IsNull()) options = args[0]->ToObject();
     if (args.Length() > 1) {
       if (Buffer::HasInstance(args[1])) {
         data = (uint8_t*) Buffer::Data(args[1]);
@@ -91,7 +91,7 @@ HCI::StartAdvertising(const Arguments& args)
         if (Buffer::HasInstance(args[2])) {
           scanData = (uint8_t*) Buffer::Data(args[2]);
           scanLen = Buffer::Length(args[2]);
-        } else {
+        } else if (!args[2]->IsNull()) {
           ThrowException(Exception::TypeError(String::New("Third parameter must be a Buffer")));
           return scope.Close(Undefined());
         }
