@@ -6,7 +6,7 @@
         "src/btio.c",
         "src/att.cc",
         "src/btleException.cc",
-        "src/btleConnection.cc",
+        "src/peripheral.cc",
         "src/connection.cc",
         "src/hci.cc",
         "src/server.cc",

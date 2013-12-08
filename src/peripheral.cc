@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <node_buffer.h>
 
-#include "btleConnection.h"
+#include "peripheral.h"
 #include "btio.h"
 #include "btleException.h"
 #include "serverInterface.h"
@@ -13,66 +13,66 @@ using namespace node;
 
 // Constructor definition
 Persistent<Function>
-BTLEConnection::constructor;
+Peripheral::constructor;
 
 // Callback data structure
 struct callbackData {
-  callbackData() : conn(NULL), data(NULL), startHandle(0), endHandle(0) {}
-  BTLEConnection* conn;
+  callbackData() : peripheral(NULL), data(NULL), startHandle(0), endHandle(0) {}
+  Peripheral* peripheral;
   void* data;
   uint16_t startHandle;
   uint16_t endHandle;
 };
 
 // Constructor
-BTLEConnection::BTLEConnection() : att(NULL)
+Peripheral::Peripheral() : att(NULL)
 {
 }
 
 // Destructor
-BTLEConnection::~BTLEConnection()
+Peripheral::~Peripheral()
 {
   delete att;
 }
 
 // Node.js initialization
 void
-BTLEConnection::Init(Handle<Object> exports)
+Peripheral::Init(Handle<Object> exports)
 {
-  Local<FunctionTemplate> t = FunctionTemplate::New(BTLEConnection::New);
+  Local<FunctionTemplate> t = FunctionTemplate::New(Peripheral::New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
-  t->SetClassName(String::New("BTLEConnection"));
-  NODE_SET_PROTOTYPE_METHOD(t, "connect", BTLEConnection::Connect);
-  NODE_SET_PROTOTYPE_METHOD(t, "findInformation", BTLEConnection::FindInformation);
-  NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", BTLEConnection::FindByTypeValue);
-  NODE_SET_PROTOTYPE_METHOD(t, "readByType", BTLEConnection::ReadByType);
-  NODE_SET_PROTOTYPE_METHOD(t, "readByGroupType", BTLEConnection::ReadByGroupType);
-  NODE_SET_PROTOTYPE_METHOD(t, "close", BTLEConnection::Close);
-  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", BTLEConnection::ReadHandle);
-  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", BTLEConnection::AddNotificationListener);
-  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", BTLEConnection::WriteCommand);
+  t->SetClassName(String::New("Peripheral"));
+  NODE_SET_PROTOTYPE_METHOD(t, "connect", Peripheral::Connect);
+  NODE_SET_PROTOTYPE_METHOD(t, "findInformation", Peripheral::FindInformation);
+  NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", Peripheral::FindByTypeValue);
+  NODE_SET_PROTOTYPE_METHOD(t, "readByType", Peripheral::ReadByType);
+  NODE_SET_PROTOTYPE_METHOD(t, "readByGroupType", Peripheral::ReadByGroupType);
+  NODE_SET_PROTOTYPE_METHOD(t, "close", Peripheral::Close);
+  NODE_SET_PROTOTYPE_METHOD(t, "readHandle", Peripheral::ReadHandle);
+  NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", Peripheral::AddNotificationListener);
+  NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", Peripheral::WriteCommand);
 
-  exports->Set(String::NewSymbol("Connection"), t->GetFunction());
+  exports->Set(String::NewSymbol("Peripheral"), t->GetFunction());
 }
 
 // Node.js new object construction
 Handle<Value>
-BTLEConnection::New(const Arguments& args)
+Peripheral::New(const Arguments& args)
 {
   HandleScope scope;
 
   assert(args.IsConstructCall());
 
-  BTLEConnection* conn = new BTLEConnection();
-  conn->self = Persistent<Object>::New(args.This());
-  conn->Wrap(args.This());
+  Peripheral* peripheral = new Peripheral();
+  peripheral->self = Persistent<Object>::New(args.This());
+  peripheral->Wrap(args.This());
 
   return scope.Close(args.This());
 }
 
 // Connect node.js method
 Handle<Value>
-BTLEConnection::Connect(const Arguments& args)
+Peripheral::Connect(const Arguments& args)
 {
   HandleScope scope;
   struct set_opts opts;
@@ -115,17 +115,17 @@ BTLEConnection::Connect(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   //callback.MakeWeak(*callback, weak_cb);
-  conn->connectionCallback = callback;
+  peripheral->connectionCallback = callback;
 
-  conn->att = new Att();
-  conn->att->onError(onError, conn);
+  peripheral->att = new Att();
+  peripheral->att->onError(onError, peripheral);
   try {
-    conn->att->connect(opts, onConnect, (void*) conn);
+    peripheral->att->connect(opts, onConnect, (void*) peripheral);
   } catch (BTLEException& e) {
-    conn->emit_error();
+    peripheral->emit_error();
   }
 
   return scope.Close(Undefined());
@@ -133,7 +133,7 @@ BTLEConnection::Connect(const Arguments& args)
 
 // Send a Find Information request
 Handle<Value>
-BTLEConnection::FindInformation(const Arguments& args)
+Peripheral::FindInformation(const Arguments& args)
 {
   HandleScope scope;
 
@@ -157,7 +157,7 @@ BTLEConnection::FindInformation(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[2]));
   //callback.MakeWeak(*callback, weak_cb);
@@ -168,17 +168,17 @@ BTLEConnection::FindInformation(const Arguments& args)
   
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
-  cd->conn = conn;
+  cd->peripheral = peripheral;
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
-  conn->att->findInformation(startHandle, endHandle, onFindInformation, cd);
+  peripheral->att->findInformation(startHandle, endHandle, onFindInformation, cd);
   return scope.Close(Undefined());
 }
 
 // Send a Find By Type Value request
 Handle<Value>
-BTLEConnection::FindByTypeValue(const Arguments& args)
+Peripheral::FindByTypeValue(const Arguments& args)
 {
   HandleScope scope;
 
@@ -212,7 +212,7 @@ BTLEConnection::FindByTypeValue(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[4]));
   //callback.MakeWeak(*callback, weak_cb);
@@ -226,18 +226,18 @@ BTLEConnection::FindByTypeValue(const Arguments& args)
   
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
-  cd->conn = conn;
+  cd->peripheral = peripheral;
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
-  conn->att->findByTypeValue(startHandle, endHandle, uuid,
+  peripheral->att->findByTypeValue(startHandle, endHandle, uuid,
       (const uint8_t*) Buffer::Data(args[3]), Buffer::Length(args[3]), onFindByType, cd);
   return scope.Close(Undefined());
 }
 
 // Send a Read By Type request
 Handle<Value>
-BTLEConnection::ReadByType(const Arguments& args)
+Peripheral::ReadByType(const Arguments& args)
 {
   HandleScope scope;
 
@@ -266,7 +266,7 @@ BTLEConnection::ReadByType(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[3]));
   //callback.MakeWeak(*callback, weak_cb);
@@ -280,17 +280,17 @@ BTLEConnection::ReadByType(const Arguments& args)
   
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
-  cd->conn = conn;
+  cd->peripheral = peripheral;
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
-  conn->att->readByType(startHandle, endHandle, uuid, onReadByType, cd);
+  peripheral->att->readByType(startHandle, endHandle, uuid, onReadByType, cd);
   return scope.Close(Undefined());
 }
 
 // Send a Read By Group Type request
 Handle<Value>
-BTLEConnection::ReadByGroupType(const Arguments& args)
+Peripheral::ReadByGroupType(const Arguments& args)
 {
   HandleScope scope;
 
@@ -319,7 +319,7 @@ BTLEConnection::ReadByGroupType(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[3]));
   //callback.MakeWeak(*callback, weak_cb);
@@ -333,18 +333,18 @@ BTLEConnection::ReadByGroupType(const Arguments& args)
   
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
-  cd->conn = conn;
+  cd->peripheral = peripheral;
   cd->startHandle = startHandle;
   cd->endHandle = endHandle;
 
   // Note: Can re-use onReadByType
-  conn->att->readByGroupType(startHandle, endHandle, uuid, onReadByGroupType, cd);
+  peripheral->att->readByGroupType(startHandle, endHandle, uuid, onReadByGroupType, cd);
   return scope.Close(Undefined());
 }
 
 // Read an attribute
 Handle<Value>
-BTLEConnection::ReadHandle(const Arguments& args)
+Peripheral::ReadHandle(const Arguments& args)
 {
   HandleScope scope;
 
@@ -363,24 +363,24 @@ BTLEConnection::ReadHandle(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
   //callback.MakeWeak(*callback, weak_cb);
   
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
-  cd->conn = conn;
+  cd->peripheral = peripheral;
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->att->readAttribute(handle, onReadAttribute, cd);
+  peripheral->att->readAttribute(handle, onReadAttribute, cd);
   return scope.Close(Undefined());
 }
 
 // Write an attribute without a response
 Handle<Value>
-BTLEConnection::WriteCommand(const v8::Arguments& args)
+Peripheral::WriteCommand(const v8::Arguments& args)
 {
   HandleScope scope;
 
@@ -410,18 +410,18 @@ BTLEConnection::WriteCommand(const v8::Arguments& args)
     //callback.MakeWeak(*callback, weak_cb);
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
 
   struct callbackData* cd = new struct callbackData();
-  cd->conn = conn;
+  cd->peripheral = peripheral;
   if (args.Length() > 2) {
     cd->data = *callback;
   }
 
-  conn->att->writeCommand(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]),
+  peripheral->att->writeCommand(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]),
       onWrite, cd);
 
   return scope.Close(Undefined());
@@ -429,7 +429,7 @@ BTLEConnection::WriteCommand(const v8::Arguments& args)
 
 // Write an attribute with a response
 Handle<Value>
-BTLEConnection::WriteRequest(const v8::Arguments& args)
+Peripheral::WriteRequest(const v8::Arguments& args)
 {
   HandleScope scope;
 
@@ -448,23 +448,23 @@ BTLEConnection::WriteRequest(const v8::Arguments& args)
     return scope.Close(Undefined());
   }
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
 
-  conn->att->writeRequest(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]));
+  peripheral->att->writeRequest(handle, (const uint8_t*) Buffer::Data(args[1]), Buffer::Length(args[1]));
 
   return scope.Close(Undefined());
 }
 
 // Add a listener for notifications
 Handle<Value>
-BTLEConnection::AddNotificationListener(const Arguments& args)
+Peripheral::AddNotificationListener(const Arguments& args)
 {
   HandleScope scope;
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   if (args.Length() < 2) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
@@ -486,22 +486,22 @@ BTLEConnection::AddNotificationListener(const Arguments& args)
 
   struct callbackData* cd = new struct callbackData();
   cd->data = *callback;
-  cd->conn = conn;
+  cd->peripheral = peripheral;
 
   int handle;
   getIntValue(args[0]->ToNumber(), handle);
-  conn->att->listenForNotifications(handle, onReadNotification, cd);
+  peripheral->att->listenForNotifications(handle, onReadNotification, cd);
 
   return scope.Close(Undefined());
 }
 
 // Close the connection
 Handle<Value>
-BTLEConnection::Close(const Arguments& args)
+Peripheral::Close(const Arguments& args)
 {
   HandleScope scope;
 
-  BTLEConnection* conn = ObjectWrap::Unwrap<BTLEConnection>(args.This());
+  Peripheral* peripheral = ObjectWrap::Unwrap<Peripheral>(args.This());
 
   if (args.Length() > 0) {
     if (!args[0]->IsFunction()) {
@@ -510,19 +510,19 @@ BTLEConnection::Close(const Arguments& args)
     } else {
       Persistent<Function> callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
       //callback.MakeWeak(*callback, weak_cb);
-      conn->closeCallback = callback;
+      peripheral->closeCallback = callback;
     }
   }
 
-  if (conn->att) {
-    conn->att->close(onClose, (void*) conn);
+  if (peripheral->att) {
+    peripheral->att->close(onClose, (void*) peripheral);
   }
 
   return scope.Close(Undefined());
 }
 
 Local<Object>
-BTLEConnection::getAttributeInfo(Att::AttributeInfo* attribute)
+Peripheral::getAttributeInfo(Att::AttributeInfo* attribute)
 {
   Local<Object> ret = Object::New();
   ret->Set(String::New("handle"), Integer::New(attribute->handle));
@@ -534,7 +534,7 @@ BTLEConnection::getAttributeInfo(Att::AttributeInfo* attribute)
 }
 
 Local<Object>
-BTLEConnection::getHandlesInfo(Att::HandlesInfo* attribute)
+Peripheral::getHandlesInfo(Att::HandlesInfo* attribute)
 {
   Local<Object> ret = Object::New();
   ret->Set(String::New("handle"), Integer::New(attribute->handle));
@@ -544,7 +544,7 @@ BTLEConnection::getHandlesInfo(Att::HandlesInfo* attribute)
 }
 
 Local<Object>
-BTLEConnection::getAttributeData(Att::AttributeData* attribute)
+Peripheral::getAttributeData(Att::AttributeData* attribute)
 {
   Local<Object> ret = Object::New();
   ret->Set(String::New("handle"), Integer::New(attribute->handle));
@@ -556,7 +556,7 @@ BTLEConnection::getAttributeData(Att::AttributeData* attribute)
 }
 
 Local<Object>
-BTLEConnection::getGroupAttributeData(Att::GroupAttributeData* attribute)
+Peripheral::getGroupAttributeData(Att::GroupAttributeData* attribute)
 {
   Local<Object> ret = Object::New();
   ret->Set(String::New("handle"), Integer::New(attribute->handle));
@@ -570,7 +570,7 @@ BTLEConnection::getGroupAttributeData(Att::GroupAttributeData* attribute)
 
 // Emit an 'error' event
 void
-BTLEConnection::emit_error()
+Peripheral::emit_error()
 {
     uv_err_t err = uv_last_error(uv_default_loop());
     const int argc = 3;
@@ -582,7 +582,7 @@ BTLEConnection::emit_error()
 }
 
 void
-BTLEConnection::emit_error(const char* errorMessage)
+Peripheral::emit_error(const char* errorMessage)
 {
     const int argc = 3;
     Local<Value> error = String::New(errorMessage);
@@ -594,14 +594,14 @@ BTLEConnection::emit_error(const char* errorMessage)
 
 // Callback executed when we get connected
 void
-BTLEConnection::onConnect(void* data, int status, int events)
+Peripheral::onConnect(void* data, int status, int events)
 {
-  BTLEConnection* conn = (BTLEConnection *) data;
-  conn->handleConnect(status, events);
+  Peripheral* peripheral = (Peripheral *) data;
+  peripheral->handleConnect(status, events);
 }
 
 void
-BTLEConnection::handleConnect(int status, int events)
+Peripheral::handleConnect(int status, int events)
 {
   if (status == 0) {
     if (connectionCallback.IsEmpty()) {
@@ -632,7 +632,7 @@ BTLEConnection::handleConnect(int status, int events)
 }
 
 const char*
-BTLEConnection::createErrorMessage(uint8_t err)
+Peripheral::createErrorMessage(uint8_t err)
 {
   const char* msg = Att::getErrorString(err);
   char buffer[128];
@@ -644,7 +644,7 @@ BTLEConnection::createErrorMessage(uint8_t err)
 }
 
 void
-BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* error)
+Peripheral::sendError(struct callbackData* cd, uint8_t err, const char* error)
 {
     Persistent<Function> callback = static_cast<Function*>(cd->data);
     const int argc = 2;
@@ -659,16 +659,16 @@ BTLEConnection::sendError(struct callbackData* cd, uint8_t err, const char* erro
 
 // Find Information callback
 void
-BTLEConnection::onFindInformation(uint8_t status, void* data, void* list, const char* error)
+Peripheral::onFindInformation(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Att::AttributeInfoList* infoList = (Att::AttributeInfoList*) list;
-  cd->conn->handleFindInformation(status, *infoList, cd, error);
+  cd->peripheral->handleFindInformation(status, *infoList, cd, error);
   delete infoList;
 }
 
 void
-BTLEConnection::handleFindInformation(uint8_t status, Att::AttributeInfoList& list, struct callbackData* cd, const char* error)
+Peripheral::handleFindInformation(uint8_t status, Att::AttributeInfoList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -696,16 +696,16 @@ BTLEConnection::handleFindInformation(uint8_t status, Att::AttributeInfoList& li
 // FindByTypeValue callback
 
 void
-BTLEConnection::onFindByType(uint8_t status, void* data, void* list, const char* error)
+Peripheral::onFindByType(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Att::HandlesInfoList* infoList = (Att::HandlesInfoList*) list;
-  cd->conn->handleFindByType(status, *infoList, cd, error);
+  cd->peripheral->handleFindByType(status, *infoList, cd, error);
   delete infoList;
 }
 
 void
-BTLEConnection::handleFindByType(uint8_t status, Att::HandlesInfoList& list, struct callbackData* cd, const char* error)
+Peripheral::handleFindByType(uint8_t status, Att::HandlesInfoList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -733,16 +733,16 @@ BTLEConnection::handleFindByType(uint8_t status, Att::HandlesInfoList& list, str
 // ReadByType callback
 
 void
-BTLEConnection::onReadByType(uint8_t status, void* data, void* list, const char* error)
+Peripheral::onReadByType(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Att::AttributeDataList* dataList = (Att::AttributeDataList*) list;
-  cd->conn->handleReadByType(status, *dataList, cd, error);
+  cd->peripheral->handleReadByType(status, *dataList, cd, error);
   delete dataList;
 }
 
 void
-BTLEConnection::handleReadByType(uint8_t status, Att::AttributeDataList& list, struct callbackData* cd, const char* error)
+Peripheral::handleReadByType(uint8_t status, Att::AttributeDataList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -770,16 +770,16 @@ BTLEConnection::handleReadByType(uint8_t status, Att::AttributeDataList& list, s
 // ReadByGroupType callback
 
 void
-BTLEConnection::onReadByGroupType(uint8_t status, void* data, void* list, const char* error)
+Peripheral::onReadByGroupType(uint8_t status, void* data, void* list, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Att::GroupAttributeDataList* dataList = (Att::GroupAttributeDataList*) list;
-  cd->conn->handleReadByGroupType(status, *dataList, cd, error);
+  cd->peripheral->handleReadByGroupType(status, *dataList, cd, error);
   delete dataList;
 }
 
 void
-BTLEConnection::handleReadByGroupType(uint8_t status, Att::GroupAttributeDataList& list, struct callbackData* cd, const char* error)
+Peripheral::handleReadByGroupType(uint8_t status, Att::GroupAttributeDataList& list, struct callbackData* cd, const char* error)
 {
   if (error) {
     sendError(cd, status, error);
@@ -806,7 +806,7 @@ BTLEConnection::handleReadByGroupType(uint8_t status, Att::GroupAttributeDataLis
 
 // Read attribute callback
 void
-BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+Peripheral::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Persistent<Function> callback = static_cast<Function*>(cd->data);
@@ -815,19 +815,19 @@ BTLEConnection::onReadAttribute(uint8_t status, void* data, uint8_t* buf, int le
     memcpy(Buffer::Data(buffer), buf, len);
     const int argc = 2;
     Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
-    callback->Call(cd->conn->self, argc, argv);
+    callback->Call(cd->peripheral->self, argc, argv);
     delete cd;
   } else {
     const int argc = 2;
-    const char* msg = error == NULL ? cd->conn->createErrorMessage(status) : error;
+    const char* msg = error == NULL ? cd->peripheral->createErrorMessage(status) : error;
     Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
-    callback->Call(cd->conn->self, argc, argv);
+    callback->Call(cd->peripheral->self, argc, argv);
   }
 }
 
 // Read notification callback
 void
-BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
+Peripheral::onReadNotification(uint8_t status, void* data, uint8_t* buf, int len, const char* error)
 {
   struct callbackData* cd = static_cast<struct callbackData*>(data);
   Persistent<Function> callback = static_cast<Function*>(cd->data);
@@ -836,32 +836,32 @@ BTLEConnection::onReadNotification(uint8_t status, void* data, uint8_t* buf, int
     memcpy(Buffer::Data(buffer), buf, len);
     const int argc = 2;
     Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
-    callback->Call(cd->conn->self,  argc, argv);
+    callback->Call(cd->peripheral->self,  argc, argv);
     // NOTE: We don't delete cd here because we reuse it for the notifications
   } else {
     const int argc = 2;
-    const char* msg = error == NULL ? cd->conn->createErrorMessage(status) : error;
+    const char* msg = error == NULL ? cd->peripheral->createErrorMessage(status) : error;
     Local<Value> argv[argc] = { String::New(msg), Local<Value>::New(Null()) };
-    callback->Call(cd->conn->self, argc, argv);
+    callback->Call(cd->peripheral->self, argc, argv);
   }
 }
 
 // Write callback
 void
-BTLEConnection::onWrite(void* data, const char* error)
+Peripheral::onWrite(void* data, const char* error)
 {
   struct callbackData* cd = (struct callbackData*) data;
   if (error) {
     // Error on write. Emit error if we don't have a callback
     if (cd->data == NULL) {
-      cd->conn->emit_error(error);
+      cd->peripheral->emit_error(error);
     } else {
       // Call the provided callback with the error data
       Persistent<Function> callback = static_cast<Function*>(cd->data);
       const int argc = 1;
       Local<Value> err = ErrnoException(errno, "write", error);
       Local<Value> argv[argc] = { err };
-      callback->Call(cd->conn->self, argc, argv);
+      callback->Call(cd->peripheral->self, argc, argv);
     }
   } else {
     // Successful write. If they provided a callback, call it
@@ -869,7 +869,7 @@ BTLEConnection::onWrite(void* data, const char* error)
       Persistent<Function> callback = static_cast<Function*>(cd->data);
       const int argc = 1;
       Local<Value> argv[argc] = { Local<Value>::New(Null()) };
-      callback->Call(cd->conn->self, argc, argv);
+      callback->Call(cd->peripheral->self, argc, argv);
     }
   }
   delete cd;
@@ -877,7 +877,7 @@ BTLEConnection::onWrite(void* data, const char* error)
 
 // Called when we request a value be made "weak"
 void
-BTLEConnection::weak_cb(Persistent<Value> object, void* parameter)
+Peripheral::weak_cb(Persistent<Value> object, void* parameter)
 {
   Function* callback = static_cast<Function*>(parameter);
 
@@ -889,34 +889,34 @@ BTLEConnection::weak_cb(Persistent<Value> object, void* parameter)
 
 // Close callback
 void
-BTLEConnection::onClose(void* data)
+Peripheral::onClose(void* data)
 {
-  BTLEConnection* conn = (BTLEConnection *) data;
+  Peripheral* peripheral = (Peripheral *) data;
 
-  if (conn->closeCallback.IsEmpty()) {
+  if (peripheral->closeCallback.IsEmpty()) {
     // Emit a 'close' event, with no args
     const int argc = 1;
     Local<Value> argv[argc] = { String::New("close") };
-    MakeCallback(conn->self, "emit", argc, argv);
+    MakeCallback(peripheral->self, "emit", argc, argv);
   } else {
     const int argc = 1;
     Local<Value> argv[argc] = { Local<Value>::New(Null()) };
-    conn->closeCallback->Call(Context::GetCurrent()->Global(), argc, argv);
+    peripheral->closeCallback->Call(Context::GetCurrent()->Global(), argc, argv);
   }
 }
 
 void
-BTLEConnection::onError(void* data, const char* error)
+Peripheral::onError(void* data, const char* error)
 {
-  BTLEConnection* conn = (BTLEConnection*) data;
+  Peripheral* peripheral = (Peripheral*) data;
 
-  conn->emit_error(error);
+  peripheral->emit_error(error);
 }
 
 // Node.js initialization
 extern "C" void init(Handle<Object> exports)
 {
-  BTLEConnection::Init(exports);
+  Peripheral::Init(exports);
   ServerInterface::Init(exports);
   HCI::Init(exports);
 }

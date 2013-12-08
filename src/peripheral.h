@@ -1,5 +1,5 @@
-#ifndef BTLE_CONNECTION_H
-#define BTLE_CONNECTION_H
+#ifndef PERIPHERAL_H
+#define PERIPHERAL_H
 
 #include <node.h>
 
@@ -9,11 +9,11 @@
  * Node.js interface class, does all the node.js object wrapping stuff,
  * and delegates all the protocol stuff to att.{h,cc}.
  */
-class BTLEConnection: node::ObjectWrap {
+class Peripheral: node::ObjectWrap {
 public:
   // Constructor/Destructor
-  BTLEConnection();
-  virtual ~BTLEConnection();
+  Peripheral();
+  virtual ~Peripheral();
 
   // Node.js initialization
   static void Init(v8::Handle<v8::Object> exports);
