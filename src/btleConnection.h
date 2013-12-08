@@ -74,7 +74,6 @@ private:
 
   v8::Handle<v8::Object> self;
   Att* att;
-  Connection* connection;
   v8::Persistent<v8::Function> connectionCallback;
   v8::Persistent<v8::Function> closeCallback;
 };

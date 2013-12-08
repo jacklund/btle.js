@@ -2,7 +2,6 @@
 #include <node_buffer.h>
 
 #include "btleConnection.h"
-#include "connection.h"
 #include "btio.h"
 #include "btleException.h"
 #include "serverInterface.h"
@@ -26,7 +25,7 @@ struct callbackData {
 };
 
 // Constructor
-BTLEConnection::BTLEConnection() : att(NULL), connection(NULL)
+BTLEConnection::BTLEConnection() : att(NULL)
 {
 }
 
@@ -34,7 +33,6 @@ BTLEConnection::BTLEConnection() : att(NULL), connection(NULL)
 BTLEConnection::~BTLEConnection()
 {
   delete att;
-  delete connection;
 }
 
 // Node.js initialization
@@ -122,11 +120,10 @@ BTLEConnection::Connect(const Arguments& args)
   //callback.MakeWeak(*callback, weak_cb);
   conn->connectionCallback = callback;
 
-  conn->connection = new Connection();
-  conn->att = new Att(conn->connection);
+  conn->att = new Att();
   conn->att->onError(onError, conn);
   try {
-    conn->connection->connect(opts, onConnect, (void*) conn);
+    conn->att->connect(opts, onConnect, (void*) conn);
   } catch (BTLEException& e) {
     conn->emit_error();
   }
@@ -518,7 +515,7 @@ BTLEConnection::Close(const Arguments& args)
   }
 
   if (conn->att) {
-    conn->connection->close(onClose, (void*) conn);
+    conn->att->close(onClose, (void*) conn);
   }
 
   return scope.Close(Undefined());

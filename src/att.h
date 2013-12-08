@@ -66,8 +66,14 @@ public:
   static const char* getOpcodeName(uint8_t opcode);
 
   // Constructor/Destructor
-  Att(Connection* connection);
+  Att();
   virtual ~Att();
+
+  // Connect to a device
+  void connect(struct set_opts& opts, ConnectCallback connect, void* data);
+
+  // Close the connection
+  void close(Connection::CloseCallback cb, void* data);
 
   // Find information
   void findInformation(uint16_t startHandle, uint16_t endHandle, AttributeListCallback callback, void* data);

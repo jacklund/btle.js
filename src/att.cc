@@ -136,8 +136,8 @@ Att::encode(uint8_t opcode, uint16_t startHandle, uint16_t endHandle, const bt_u
 }
 
 // Constructor
-Att::Att(Connection* conn)
-  : connection(conn), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
+Att::Att()
+  : connection(new Connection()), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
     attributeList(NULL), groupAttributeList(NULL), handlesInfoList(NULL)
 {
   conn->registerReadCallback(onRead, static_cast<void*>(this));
@@ -148,6 +148,19 @@ Att::Att(Connection* conn)
 Att::~Att()
 {
   pthread_mutex_destroy(&notificationMapLock);
+  delete connection;
+}
+
+void
+Att::connect(struct set_opts& opts, ConnectCallback connect, void* data)
+{
+  connection->connect(opts, connect, data);
+}
+
+void
+Att::close(Connection::CloseCallback cb, void* data)
+{
+  connection->close(cb, data);
 }
 
 bool
