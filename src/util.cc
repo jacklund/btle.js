@@ -55,9 +55,11 @@ bool getSourceAddr(Handle<String> key, Local<Object> options, struct set_opts& o
 
 bool setOpts(struct set_opts& opts, Local<String> destination, Local<Object> options)
 {
+  bool ret = setOpts(opts, options);
+
   str2ba(getStringValue(destination), &opts.dst);
 
-  return setOpts(opts, options);
+  return ret;
 }
 
 bool setOpts(struct set_opts& opts, Local<Object> options)
