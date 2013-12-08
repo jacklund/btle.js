@@ -70,7 +70,7 @@ public:
   virtual ~Att();
 
   // Connect to a device
-  void connect(struct set_opts& opts, ConnectCallback connect, void* data);
+  void connect(struct set_opts& opts, Connection::ConnectCallback connect, void* data);
 
   // Close the connection
   void close(Connection::CloseCallback cb, void* data);

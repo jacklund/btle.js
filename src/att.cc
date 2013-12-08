@@ -140,7 +140,7 @@ Att::Att()
   : connection(new Connection()), errorHandler(NULL), errorData(NULL), currentRequest(NULL),
     attributeList(NULL), groupAttributeList(NULL), handlesInfoList(NULL)
 {
-  conn->registerReadCallback(onRead, static_cast<void*>(this));
+  connection->registerReadCallback(onRead, static_cast<void*>(this));
   pthread_mutex_init(&notificationMapLock, NULL);
 }
 
@@ -152,7 +152,7 @@ Att::~Att()
 }
 
 void
-Att::connect(struct set_opts& opts, ConnectCallback connect, void* data)
+Att::connect(struct set_opts& opts, Connection::ConnectCallback connect, void* data)
 {
   connection->connect(opts, connect, data);
 }
