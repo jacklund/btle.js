@@ -9,8 +9,7 @@
         "src/peripheral.cc",
         "src/connection.cc",
         "src/hci.cc",
-        "src/server.cc",
-        "src/serverInterface.cc",
+        "src/central.cc",
         "src/util.cc"
       ],
       "link_settings": {
