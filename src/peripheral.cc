@@ -4,7 +4,7 @@
 #include "peripheral.h"
 #include "btio.h"
 #include "btleException.h"
-#include "serverInterface.h"
+#include "central.h"
 #include "hci.h"
 #include "util.h"
 
@@ -917,7 +917,7 @@ Peripheral::onError(void* data, const char* error)
 extern "C" void init(Handle<Object> exports)
 {
   Peripheral::Init(exports);
-  ServerInterface::Init(exports);
+  Central::Init(exports);
   HCI::Init(exports);
 }
 

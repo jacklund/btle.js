@@ -21,7 +21,7 @@ private:
   static uv_buf_t onAlloc(uv_handle_t* handle, size_t suggested);
   static void onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
   static void onWrite(uv_write_t* req, int status);
-  static void onClose(void* data);
+  static void onClose(uv_handle_t* handle);
 
   uv_stream_t* getStream() { return (uv_stream_t*) tcp; }
 

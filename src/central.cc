@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <node_buffer.h>
 
+#include "btleException.h"
 #include "central.h"
 #include "btio.h"
 #include "util.h"
@@ -56,7 +57,7 @@ Central::Listen(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  if (!args[0]->IsObject()) {
+  if (!args[0]->IsObject() && !args[0]->IsNull()) {
     ThrowException(Exception::TypeError(String::New("First argument must be either listen options or a callback")));
     return scope.Close(Undefined());
   }
@@ -105,8 +106,8 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 {
   // Need to do this, otherwise onClose will crash
   Central* central = (Central*) handle->data;
-  central->stopPolling();
-  handle->data = NULL;
+  uv_poll_stop(central->poll_handle);
+  handle->data = central;
   uv_close((uv_handle_t*) handle, onClose);
   if (status == 0) {
     // Convert the socket to a TCP handle, and start reading
@@ -152,8 +153,8 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     Local<Value> argv[argc] = { String::New("error"), error };
     MakeCallback(central->self, "emit", argc, argv);
   } else {
-    Buffer* buffer = Buffer::New(len);
-    memcpy(Buffer::Data(buffer), buf, len);
+    Buffer* buffer = Buffer::New(nread);
+    memcpy(Buffer::Data(buffer), buf.base, nread);
     const int argc = 2;
     Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
     MakeCallback(central->self, "emit", argc, argv);
@@ -161,19 +162,20 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 }
 
 void
-Central::onClose(void* data)
+Central::onClose(uv_handle_t* handle)
 {
-  Central* central = static_cast<Central*>(data);
+  Central* central = static_cast<Central*>(handle->data);
   const int argc = 1;
   Local<Value> argv[argc] = { String::New("close") };
   MakeCallback(central->self, "emit", argc, argv);
+  delete handle;
+  central->poll_handle = NULL;
 }
 
 struct WriteData {
   WriteData() : central(NULL) {}
   Central* central;
   Persistent<Function> callback;
-  Persistent<Buffer> buffer;
 };
 
 Handle<Value>
@@ -195,7 +197,6 @@ Central::Write(const Arguments& args)
 
   struct WriteData* wd = new struct WriteData();
   wd->central = central;
-  wd->buffer = Persistent<Buffer>::New<Local<Buffer>::Cast(args[0]);
 
   if (args.Length() > 1) {
     if (!args[1]->IsFunction()) {
@@ -209,7 +210,7 @@ Central::Write(const Arguments& args)
   uv_write_t* req = new uv_write_t();
   req->data = wd;
 
-  uv_write(req, getStream(), &buf, 1, onWrite);
+  uv_write(req, central->getStream(), &buf, 1, onWrite);
 
   return scope.Close(Undefined());
 }
@@ -217,8 +218,8 @@ Central::Write(const Arguments& args)
 void
 Central::onWrite(uv_write_t* req, int status)
 {
-  struct writeData* wd = (struct writeData*) req->data;
-  if (wd->callback) {
+  struct WriteData* wd = (struct WriteData*) req->data;
+  if (wd->callback.IsEmpty()) {
     if (status < 0) {
       uv_err_t err = uv_last_error(uv_default_loop());
       if (wd->callback.IsEmpty()) {
@@ -239,7 +240,6 @@ Central::onWrite(uv_write_t* req, int status)
       }
     }
   }
-  wd->buffer.Dispose();
   delete req;
   delete wd;
 }
