@@ -14,7 +14,10 @@ Persistent<Function>
 Central::constructor;
 
 Central::Central()
+: sock(-1), cid(0), imtu(0), poll_handle(NULL), tcp(NULL)
 {
+  memset(&this->src, 0, sizeof(this->src));
+  memset(&this->dst, 0, sizeof(this->dst));
 }
 
 Central::~Central()
@@ -51,6 +54,7 @@ Handle<Value>
 Central::Listen(const Arguments& args)
 {
   HandleScope scope;
+  printf("Central::Listen\n");
 
   if (args.Length() < 1) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
@@ -98,23 +102,40 @@ Central::Listen(const Arguments& args)
   uv_poll_init_socket(uv_default_loop(), central->poll_handle, central->sock);
   uv_poll_start(central->poll_handle, UV_READABLE, onConnect);
 
+  printf("Central::Listen returning\n");
   return scope.Close(Undefined());
 }
 
 void
 Central::onConnect(uv_poll_t* handle, int status, int events)
 {
-  // Need to do this, otherwise onClose will crash
-  Central* central = (Central*) handle->data;
-  uv_poll_stop(central->poll_handle);
-  handle->data = central;
+  printf("Central::onConnect, status=%d, events=%.02x\n", status, events);
+  uv_poll_stop(handle);
   uv_close((uv_handle_t*) handle, onClose);
+  Central* central = (Central*) handle->data;
   if (status == 0) {
-    // Convert the socket to a TCP handle, and start reading
+    int cli_sock = accept(central->sock, NULL, NULL);
+    if (cli_sock < 0) {
+      printf("Error on accept, errno = %d\n", errno);
+    } else {
+      printf("cli_sock = %d\n", cli_sock);
+    }
+
+    bt_io_get(cli_sock,
+			BT_IO_OPT_SOURCE_BDADDR, &central->src,
+			BT_IO_OPT_DEST, &central->dst,
+			BT_IO_OPT_CID, &central->cid,
+			BT_IO_OPT_IMTU, &central->imtu,
+			BT_IO_OPT_INVALID);
+    
+    printf("dst = %s, cid = %d, imtu = %d\n", central->dst, central->cid, central->imtu);
+    central->poll_handle = new uv_poll_t;
+    central->sock = cli_sock;
     central->tcp = new uv_tcp_t();
     uv_tcp_init(uv_default_loop(), central->tcp);
     uv_tcp_open(central->tcp, central->sock);
     central->tcp->data = (void*) central;
+
     uv_read_start((uv_stream_t*) central->tcp, onAlloc, onRead);
 
     // Call the provided callback
@@ -129,6 +150,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
     Local<Value> argv[argc] = { error, Local<Value>::New(central->self) };
     central->connectionCallback->Call(central->self, argc, argv);
   }
+  printf("Central::onConnect returning, tcp = %p\n", central->tcp);
 }
 
 //
@@ -137,39 +159,37 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 uv_buf_t
 Central::onAlloc(uv_handle_t* handle, size_t suggested)
 {
+  printf("Central::onAlloc\n");
   return uv_buf_init(new char[suggested], suggested);
 }
 
 void
 Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+  printf("Central::onRead, nread=%d\n", nread);
   // Emit 'data' event with Buffer containing data
   Central* central = static_cast<Central*>(stream->data);
   // nread < 0 signals an error
   if (nread < 0) {
-    uv_err_t err = uv_last_error(uv_default_loop());
-    const int argc = 2;
-    Local<Value> error = ErrnoException(errno, "read", uv_strerror(err));
-    Local<Value> argv[argc] = { String::New("error"), error };
-    MakeCallback(central->self, "emit", argc, argv);
-  } else {
+    uv_read_stop(stream);
+  } else if (nread > 0) {
     Buffer* buffer = Buffer::New(nread);
     memcpy(Buffer::Data(buffer), buf.base, nread);
     const int argc = 2;
     Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
     MakeCallback(central->self, "emit", argc, argv);
   }
+  printf("Central::onRead returning\n");
 }
 
 void
 Central::onClose(uv_handle_t* handle)
 {
+  printf("Central::onClose\n");
   Central* central = static_cast<Central*>(handle->data);
-  const int argc = 1;
-  Local<Value> argv[argc] = { String::New("close") };
-  MakeCallback(central->self, "emit", argc, argv);
   delete handle;
-  central->poll_handle = NULL;
+  if (((uv_poll_t*) handle) == central->poll_handle) central->poll_handle = NULL;
+  printf("Central::onClose returning\n");
 }
 
 struct WriteData {
@@ -183,6 +203,7 @@ Central::Write(const Arguments& args)
 {
   HandleScope scope;
 
+  printf("Central::Write\n");
   if (args.Length() < 1) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
@@ -212,12 +233,14 @@ Central::Write(const Arguments& args)
 
   uv_write(req, central->getStream(), &buf, 1, onWrite);
 
+  printf("Central::Write returning\n");
   return scope.Close(Undefined());
 }
 
 void
 Central::onWrite(uv_write_t* req, int status)
 {
+  printf("Central::onWrite, status = %d\n", status);
   struct WriteData* wd = (struct WriteData*) req->data;
   if (wd->callback.IsEmpty()) {
     if (status < 0) {
@@ -242,4 +265,5 @@ Central::onWrite(uv_write_t* req, int status)
   }
   delete req;
   delete wd;
+  printf("Central::onWrite returning\n");
 }

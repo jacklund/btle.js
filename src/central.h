@@ -2,6 +2,7 @@
 #define CENTRAL_H
 
 #include <node.h>
+#include <bluetooth/bluetooth.h>
 
 class Central: node::ObjectWrap {
 public:
@@ -26,6 +27,10 @@ private:
   uv_stream_t* getStream() { return (uv_stream_t*) tcp; }
 
   int sock;
+	bdaddr_t src;
+	char dst[256];
+  uint16_t cid;
+  unsigned int imtu;
   uv_poll_t* poll_handle;
   uv_tcp_t* tcp;
   v8::Handle<v8::Object> self;
