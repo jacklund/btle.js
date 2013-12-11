@@ -258,25 +258,25 @@ Central::Write(const Arguments& args)
     sprintf(buffer, "Data length of %d is greater than MTU value of %d", len, central->mtu);
     ThrowException(Exception::TypeError(String::New(buffer)));
   }
-  central->write(Buffer::Data(args[0]), Buffer::Length(args[0]), wd);
+  central->write(data, len, wd);
 
   printf("Central::Write returning\n");
   return scope.Close(Undefined());
 }
 
 void
-Central::write(const char* data, size_t len, void* data)
+Central::write(char* data, size_t len, void* wdData)
 {
-  struct WriteData* wd = static_cast<struct WriteData*>(data);
+  struct WriteData* wd = static_cast<struct WriteData*>(wdData);
   if (wd == NULL) {
     wd = new struct WriteData();
     wd->central = this;
   }
-  uv_buf_t buf = uv_buf_init(Buffer::Data(args[0]), Buffer::Length(args[0]));
+  uv_buf_t buf = uv_buf_init(data, len);
   uv_write_t* req = new uv_write_t();
   req->data = wd;
 
-  uv_write(req, central->getStream(), &buf, 1, onWrite);
+  uv_write(req, getStream(), &buf, 1, onWrite);
 }
 
 void

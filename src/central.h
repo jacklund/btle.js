@@ -27,7 +27,7 @@ private:
   uv_stream_t* getStream() { return (uv_stream_t*) tcp; }
 
   void mtuExchange(uint16_t mtu);
-  void write(const char* data, size_t len, void* data);
+  void write(char* data, size_t len, void* wd);
 
   int sock;
 	bdaddr_t src;
