@@ -14,7 +14,7 @@ Persistent<Function>
 Central::constructor;
 
 Central::Central()
-: sock(-1), cid(0), imtu(0), poll_handle(NULL), tcp(NULL)
+: sock(-1), cid(0), mtu(0), poll_handle(NULL), tcp(NULL)
 {
   memset(&this->src, 0, sizeof(this->src));
   memset(&this->dst, 0, sizeof(this->dst));
@@ -125,10 +125,10 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 			BT_IO_OPT_SOURCE_BDADDR, &central->src,
 			BT_IO_OPT_DEST, &central->dst,
 			BT_IO_OPT_CID, &central->cid,
-			BT_IO_OPT_IMTU, &central->imtu,
+			BT_IO_OPT_IMTU, &central->mtu,
 			BT_IO_OPT_INVALID);
     
-    printf("dst = %s, cid = %d, imtu = %d\n", central->dst, central->cid, central->imtu);
+    printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
     central->poll_handle = new uv_poll_t;
     central->sock = cli_sock;
     central->tcp = new uv_tcp_t();
@@ -173,13 +173,37 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (nread < 0) {
     uv_read_stop(stream);
   } else if (nread > 0) {
-    Buffer* buffer = Buffer::New(nread);
-    memcpy(Buffer::Data(buffer), buf.base, nread);
-    const int argc = 2;
-    Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
-    MakeCallback(central->self, "emit", argc, argv);
+    char opcode = buf.base[0];
+    switch (opcode) {
+      case ATT_OP_MTU_REQ:
+        central->mtuExchange(btohs(*(uint16_t*)&buf.base[1]));
+        break;
+
+      default:
+        Buffer* buffer = Buffer::New(nread);
+        memcpy(Buffer::Data(buffer), buf.base, nread);
+        const int argc = 2;
+        Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
+        MakeCallback(central->self, "emit", argc, argv);
+        break;
+    }
   }
   printf("Central::onRead returning\n");
+}
+
+void
+Central::mtuExchange(uint16_t mtu)
+{
+  printf("Central::mtuExchange(%d)\n", mtu);
+
+  char buffer[3];
+  buffer[0] = ATT_OP_MTU_RESP;
+  *(uint16_t*)&buffer[1] = htobs(this->mtu);
+  write(buffer, sizeof(buffer), NULL);
+  if (mtu < this->mtu) {
+    this->mtu = mtu;
+    printf("MTU set to %d\n", this->mtu);
+  }
 }
 
 void
@@ -227,14 +251,32 @@ Central::Write(const Arguments& args)
     wd->callback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
   }
 
+  char* data = Buffer::Data(args[0]);
+  size_t len = Buffer::Length(args[0]);
+  if (len > central->mtu) {
+    char buffer[256];
+    sprintf(buffer, "Data length of %d is greater than MTU value of %d", len, central->mtu);
+    ThrowException(Exception::TypeError(String::New(buffer)));
+  }
+  central->write(Buffer::Data(args[0]), Buffer::Length(args[0]), wd);
+
+  printf("Central::Write returning\n");
+  return scope.Close(Undefined());
+}
+
+void
+Central::write(const char* data, size_t len, void* data)
+{
+  struct WriteData* wd = static_cast<struct WriteData*>(data);
+  if (wd == NULL) {
+    wd = new struct WriteData();
+    wd->central = this;
+  }
   uv_buf_t buf = uv_buf_init(Buffer::Data(args[0]), Buffer::Length(args[0]));
   uv_write_t* req = new uv_write_t();
   req->data = wd;
 
   uv_write(req, central->getStream(), &buf, 1, onWrite);
-
-  printf("Central::Write returning\n");
-  return scope.Close(Undefined());
 }
 
 void

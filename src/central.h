@@ -26,11 +26,14 @@ private:
 
   uv_stream_t* getStream() { return (uv_stream_t*) tcp; }
 
+  void mtuExchange(uint16_t mtu);
+  void write(const char* data, size_t len, void* data);
+
   int sock;
 	bdaddr_t src;
 	char dst[256];
   uint16_t cid;
-  unsigned int imtu;
+  unsigned int mtu;
   uv_poll_t* poll_handle;
   uv_tcp_t* tcp;
   v8::Handle<v8::Object> self;
