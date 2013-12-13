@@ -57,7 +57,8 @@ Central::GetMTU(const Arguments& args)
 {
   HandleScope scope;
 
-  Local<Number> mtu = Number::New(this->mtu);
+  Central* central = ObjectWrap::Unwrap<Central>(args.This());
+  Local<Number> mtu = Number::New(central->mtu);
 
   return scope.Close(mtu);
 }
@@ -77,7 +78,8 @@ Central::SetMTU(const Arguments& args)
     return scope.Close(Undefined());
   }
 
-  this->mtu = args[0]->IntegerValue();
+  Central* central = ObjectWrap::Unwrap<Central>(args.This());
+  central->mtu = args[0]->IntegerValue();
 
   return scope.Close(Undefined());
 }

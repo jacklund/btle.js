@@ -34,7 +34,7 @@ private:
 	bdaddr_t src;
 	char dst[256];
   uint16_t cid;
-  int mtu;
+  size_t mtu;
   uv_poll_t* poll_handle;
   uv_tcp_t* tcp;
   v8::Handle<v8::Object> self;
