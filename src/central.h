@@ -14,6 +14,8 @@ public:
   static v8::Handle<v8::Value> New(const v8::Arguments& args);
   static v8::Handle<v8::Value> Listen(const v8::Arguments& args);
   static v8::Handle<v8::Value> Write(const v8::Arguments& args);
+  static v8::Handle<v8::Value> SetMTU(const v8::Arguments& args);
+  static v8::Handle<v8::Value> GetMTU(const v8::Arguments& args);
 
 private:
   static v8::Persistent<v8::Function> constructor;
@@ -26,14 +28,13 @@ private:
 
   uv_stream_t* getStream() { return (uv_stream_t*) tcp; }
 
-  void mtuExchange(uint16_t mtu);
   void write(char* data, size_t len, void* wd);
 
   int sock;
 	bdaddr_t src;
 	char dst[256];
   uint16_t cid;
-  unsigned int mtu;
+  int mtu;
   uv_poll_t* poll_handle;
   uv_tcp_t* tcp;
   v8::Handle<v8::Object> self;

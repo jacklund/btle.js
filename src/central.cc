@@ -29,11 +29,13 @@ Central::Init(Handle<Object> exports)
 {
   Local<FunctionTemplate> t = FunctionTemplate::New(Central::New);
   t->InstanceTemplate()->SetInternalFieldCount(2);
-  t->SetClassName(String::New("Central"));
+  t->SetClassName(String::New("CentralInterface"));
   NODE_SET_PROTOTYPE_METHOD(t, "listen", Central::Listen);
   NODE_SET_PROTOTYPE_METHOD(t, "write", Central::Write);
+  NODE_SET_PROTOTYPE_METHOD(t, "getMTU", Central::GetMTU);
+  NODE_SET_PROTOTYPE_METHOD(t, "setMTU", Central::SetMTU);
 
-  exports->Set(String::NewSymbol("Central"), t->GetFunction());
+  exports->Set(String::NewSymbol("CentralInterface"), t->GetFunction());
 }
 
 Handle<Value>
@@ -48,6 +50,36 @@ Central::New(const Arguments& args)
   central->Wrap(args.This());
 
   return scope.Close(args.This());
+}
+
+Handle<Value>
+Central::GetMTU(const Arguments& args)
+{
+  HandleScope scope;
+
+  Local<Number> mtu = Number::New(this->mtu);
+
+  return scope.Close(mtu);
+}
+
+Handle<Value>
+Central::SetMTU(const Arguments& args)
+{
+  HandleScope scope;
+
+  if (args.Length() == 0) {
+    ThrowException(Exception::TypeError(String::New("No argument provided")));
+    return scope.Close(Undefined());
+  }
+
+  if (!args[0]->IsNumber()) {
+    ThrowException(Exception::TypeError(String::New("Argument must be a number")));
+    return scope.Close(Undefined());
+  }
+
+  this->mtu = args[0]->IntegerValue();
+
+  return scope.Close(Undefined());
 }
 
 Handle<Value>
@@ -173,37 +205,13 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (nread < 0) {
     uv_read_stop(stream);
   } else if (nread > 0) {
-    char opcode = buf.base[0];
-    switch (opcode) {
-      case ATT_OP_MTU_REQ:
-        central->mtuExchange(btohs(*(uint16_t*)&buf.base[1]));
-        break;
-
-      default:
-        Buffer* buffer = Buffer::New(nread);
-        memcpy(Buffer::Data(buffer), buf.base, nread);
-        const int argc = 2;
-        Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
-        MakeCallback(central->self, "emit", argc, argv);
-        break;
-    }
+    Buffer* buffer = Buffer::New(nread);
+    memcpy(Buffer::Data(buffer), buf.base, nread);
+    const int argc = 2;
+    Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
+    MakeCallback(central->self, "emit", argc, argv);
   }
   printf("Central::onRead returning\n");
-}
-
-void
-Central::mtuExchange(uint16_t mtu)
-{
-  printf("Central::mtuExchange(%d)\n", mtu);
-
-  char buffer[3];
-  buffer[0] = ATT_OP_MTU_RESP;
-  *(uint16_t*)&buffer[1] = htobs(this->mtu);
-  write(buffer, sizeof(buffer), NULL);
-  if (mtu < this->mtu) {
-    this->mtu = mtu;
-    printf("MTU set to %d\n", this->mtu);
-  }
 }
 
 void

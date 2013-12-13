@@ -41,7 +41,7 @@ Peripheral::Init(Handle<Object> exports)
 {
   Local<FunctionTemplate> t = FunctionTemplate::New(Peripheral::New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
-  t->SetClassName(String::New("Peripheral"));
+  t->SetClassName(String::New("PeripheralInterface"));
   NODE_SET_PROTOTYPE_METHOD(t, "connect", Peripheral::Connect);
   NODE_SET_PROTOTYPE_METHOD(t, "findInformation", Peripheral::FindInformation);
   NODE_SET_PROTOTYPE_METHOD(t, "findByTypeValue", Peripheral::FindByTypeValue);
@@ -52,7 +52,7 @@ Peripheral::Init(Handle<Object> exports)
   NODE_SET_PROTOTYPE_METHOD(t, "addNotificationListener", Peripheral::AddNotificationListener);
   NODE_SET_PROTOTYPE_METHOD(t, "writeCommand", Peripheral::WriteCommand);
 
-  exports->Set(String::NewSymbol("Peripheral"), t->GetFunction());
+  exports->Set(String::NewSymbol("PeripheralInterface"), t->GetFunction());
 }
 
 // Node.js new object construction
@@ -550,7 +550,7 @@ Peripheral::getAttributeData(Att::AttributeData* attribute)
   ret->Set(String::New("handle"), Integer::New(attribute->handle));
   Buffer* buffer = Buffer::New(attribute->length);
   memcpy(Buffer::Data(buffer), attribute->data, attribute->length);
-  ret->Set(String::New("data"), buffer->handle_);
+  ret->Set(String::New("value"), buffer->handle_);
 
   return ret;
 }
@@ -563,7 +563,7 @@ Peripheral::getGroupAttributeData(Att::GroupAttributeData* attribute)
   ret->Set(String::New("groupEndHandle"), Integer::New(attribute->groupEndHandle));
   Buffer* buffer = Buffer::New(attribute->length);
   memcpy(Buffer::Data(buffer), attribute->data, attribute->length);
-  ret->Set(String::New("data"), buffer->handle_);
+  ret->Set(String::New("value"), buffer->handle_);
 
   return ret;
 }
