@@ -5,6 +5,7 @@
 #include <bluetooth/hci_lib.h>
 #include <node_buffer.h>
 
+#include "debug.h"
 #include "hci.h"
 #include "util.h"
 
@@ -267,11 +268,13 @@ HCI::setAdvertisingParameters(le_set_advertising_parameters_cp& params)
 void
 HCI::setAdvertisingData(uint8_t* data, uint8_t length)
 {
-  printf("Advertising data:\n");
-  for (uint8_t i = 0; i < length; ++i) {
-    printf("%02x ", data[i]);
+  if (debug) {
+    printf("Advertising data:\n");
+    for (uint8_t i = 0; i < length; ++i) {
+      printf("%02x ", data[i]);
+    }
+    printf("\n");
   }
-  printf("\n");
   int timeout = DEFAULT_TIMEOUT;
 
   le_set_advertising_data_cp cp;
@@ -301,11 +304,13 @@ HCI::setAdvertisingData(uint8_t* data, uint8_t length)
 void
 HCI::setScanResponseData(uint8_t* data, uint8_t length)
 {
-  printf("Scan response data:\n");
-  for (uint8_t i = 0; i < length; ++i) {
-    printf("%02x ", data[i]);
+  if (debug) {
+    printf("Scan response data:\n");
+    for (uint8_t i = 0; i < length; ++i) {
+      printf("%02x ", data[i]);
+    }
+    printf("\n");
   }
-  printf("\n");
   int timeout = DEFAULT_TIMEOUT;
 
   le_set_scan_response_data_cp cp;

@@ -3,13 +3,14 @@
   {
     "target_name": "btle",
       "sources": [
-        "src/btio.c",
         "src/att.cc",
+        "src/btio.c",
         "src/btleException.cc",
-        "src/peripheral.cc",
-        "src/connection.cc",
-        "src/hci.cc",
         "src/central.cc",
+        "src/connection.cc",
+        "src/debug.cc",
+        "src/hci.cc",
+        "src/peripheral.cc",
         "src/util.cc"
       ],
       "link_settings": {

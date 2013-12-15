@@ -7,6 +7,7 @@
 #include "central.h"
 #include "hci.h"
 #include "util.h"
+#include "debug.h"
 
 using namespace v8;
 using namespace node;
@@ -919,6 +920,7 @@ extern "C" void init(Handle<Object> exports)
   Peripheral::Init(exports);
   Central::Init(exports);
   HCI::Init(exports);
+  initDebug(exports);
 }
 
 NODE_MODULE(btle, init)

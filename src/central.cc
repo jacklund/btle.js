@@ -3,6 +3,7 @@
 
 #include "btleException.h"
 #include "central.h"
+#include "debug.h"
 #include "btio.h"
 #include "util.h"
 
@@ -88,7 +89,7 @@ Handle<Value>
 Central::Listen(const Arguments& args)
 {
   HandleScope scope;
-  printf("Central::Listen\n");
+  if (debug) printf("Central::Listen\n");
 
   if (args.Length() < 1) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
@@ -136,14 +137,14 @@ Central::Listen(const Arguments& args)
   uv_poll_init_socket(uv_default_loop(), central->poll_handle, central->sock);
   uv_poll_start(central->poll_handle, UV_READABLE, onConnect);
 
-  printf("Central::Listen returning\n");
+  if (debug) printf("Central::Listen returning\n");
   return scope.Close(Undefined());
 }
 
 void
 Central::onConnect(uv_poll_t* handle, int status, int events)
 {
-  printf("Central::onConnect, status=%d, events=%.02x\n", status, events);
+  if (debug) printf("Central::onConnect, status=%d, events=%.02x\n", status, events);
   uv_poll_stop(handle);
   uv_close((uv_handle_t*) handle, onClose);
   Central* central = (Central*) handle->data;
@@ -152,7 +153,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
     if (cli_sock < 0) {
       printf("Error on accept, errno = %d\n", errno);
     } else {
-      printf("cli_sock = %d\n", cli_sock);
+      if (debug) printf("cli_sock = %d\n", cli_sock);
     }
 
     bt_io_get(cli_sock,
@@ -162,7 +163,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 			BT_IO_OPT_IMTU, &central->mtu,
 			BT_IO_OPT_INVALID);
     
-    printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
+    if (debug) printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
     central->poll_handle = new uv_poll_t;
     central->sock = cli_sock;
     central->tcp = new uv_tcp_t();
@@ -184,7 +185,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
     Local<Value> argv[argc] = { error, Local<Value>::New(central->self) };
     central->connectionCallback->Call(central->self, argc, argv);
   }
-  printf("Central::onConnect returning, tcp = %p\n", central->tcp);
+  if (debug) printf("Central::onConnect returning, tcp = %p\n", central->tcp);
 }
 
 //
@@ -193,14 +194,14 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 uv_buf_t
 Central::onAlloc(uv_handle_t* handle, size_t suggested)
 {
-  printf("Central::onAlloc\n");
+  if (debug) printf("Central::onAlloc\n");
   return uv_buf_init(new char[suggested], suggested);
 }
 
 void
 Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
-  printf("Central::onRead, nread=%d\n", nread);
+  if (debug) printf("Central::onRead, nread=%d\n", nread);
   // Emit 'data' event with Buffer containing data
   Central* central = static_cast<Central*>(stream->data);
   // nread < 0 signals an error
@@ -213,17 +214,17 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     Local<Value> argv[argc] = { String::New("data"), Local<Value>::New(buffer->handle_) };
     MakeCallback(central->self, "emit", argc, argv);
   }
-  printf("Central::onRead returning\n");
+  if (debug) printf("Central::onRead returning\n");
 }
 
 void
 Central::onClose(uv_handle_t* handle)
 {
-  printf("Central::onClose\n");
+  if (debug) printf("Central::onClose\n");
   Central* central = static_cast<Central*>(handle->data);
   delete handle;
   if (((uv_poll_t*) handle) == central->poll_handle) central->poll_handle = NULL;
-  printf("Central::onClose returning\n");
+  if (debug) printf("Central::onClose returning\n");
 }
 
 struct WriteData {
@@ -237,7 +238,7 @@ Central::Write(const Arguments& args)
 {
   HandleScope scope;
 
-  printf("Central::Write\n");
+  if (debug) printf("Central::Write\n");
   if (args.Length() < 1) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
@@ -270,7 +271,7 @@ Central::Write(const Arguments& args)
   }
   central->write(data, len, wd);
 
-  printf("Central::Write returning\n");
+  if (debug) printf("Central::Write returning\n");
   return scope.Close(Undefined());
 }
 
@@ -286,13 +287,18 @@ Central::write(char* data, size_t len, void* wdData)
   uv_write_t* req = new uv_write_t();
   req->data = wd;
 
+  if (debug) {
+    printf("Central::write: ");
+    printBuffer(data, len);
+    printf("\n");
+  }
   uv_write(req, getStream(), &buf, 1, onWrite);
 }
 
 void
 Central::onWrite(uv_write_t* req, int status)
 {
-  printf("Central::onWrite, status = %d\n", status);
+  if (debug) printf("Central::onWrite, status = %d\n", status);
   struct WriteData* wd = (struct WriteData*) req->data;
   if (wd->callback.IsEmpty()) {
     if (status < 0) {
@@ -317,5 +323,5 @@ Central::onWrite(uv_write_t* req, int status)
   }
   delete req;
   delete wd;
-  printf("Central::onWrite returning\n");
+  if (debug) printf("Central::onWrite returning\n");
 }
