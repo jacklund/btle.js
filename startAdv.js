@@ -1,6 +1,7 @@
 var attribute = require('./lib/attribute');
 var btle = require('./lib/btle');
 var characteristic = require('./lib/characteristic');
+var gap = require('./lib/gap');
 var gatt = require('./lib/gatt');
 var Peripheral = require('./lib/peripheral');
 var service = require('./lib/service');
@@ -13,14 +14,10 @@ var data = {flags: Peripheral.AdvertisementFlags.LIMITED_DISCOVERABLE | Peripher
 var services = [];
 
 // GAP service
-var characteristics = [];
-characteristics.push(characteristic.create(0x02, characteristic.Properties.READ, gatt.CharTypes.DEVICE_NAME,  'My BLE Device'));
-services.push(service.create(0x01, gatt.Services.GAP, null, characteristics));
+services.push(gap.createGAPService('My BLE Device'));
 
 // GATT service
-characteristics = [];
-characteristics.push(characteristic.create(0x05, characteristic.Properties.INDICATE, 0x2A05));
-services.push(service.create(0x04, gatt.Services.GATT, null, characteristics));
+services.push(gatt.createGATTService());
 
 var peripheral = Peripheral.create(services);
 peripheral.advertise(data, data);
