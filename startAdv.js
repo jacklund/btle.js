@@ -1,26 +1,19 @@
-var attribute = require('./lib/attribute');
 var btle = require('./lib/btle');
-var characteristic = require('./lib/characteristic');
-var gap = require('./lib/gap');
-var gatt = require('./lib/gatt');
 var Peripheral = require('./lib/peripheral');
-var service = require('./lib/service');
-var UUID = require('./lib/uuid');
 
 btle.setDebug(true);
 
-var data = {flags: Peripheral.AdvertisementFlags.LIMITED_DISCOVERABLE | Peripheral.AdvertisementFlags.BR_EDR_NOT_SUPPORTED,
-            completeName: 'foo'};
+// Create the peripheral
 var services = [];
+services.push(createDeviceInfoService('My MFG', '0', '0000-0000', 'v0.01', 'v0.01', 'v0.01', 'My BLE Device'));
+var peripheral = Peripheral.create('My BLE Device', services);
 
-// GAP service
-services.push(gap.createGAPService('My BLE Device'));
+// Start advertising
+var advOptions = {flags: Peripheral.AdvertisementFlags.LIMITED_DISCOVERABLE | Peripheral.AdvertisementFlags.BR_EDR_NOT_SUPPORTED,
+            completeName: 'foo'};
+peripheral.advertise(advOptions, advOptions);
 
-// GATT service
-services.push(gatt.createGATTService());
-
-var peripheral = Peripheral.create(services);
-peripheral.advertise(data, data);
+// Listen for incoming connections
 peripheral.listen({source: 'hci0'}, function(err, central) {
   if (err) {
     return console.log(err);
