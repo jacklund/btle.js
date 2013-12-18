@@ -9,21 +9,27 @@ var services = [];
 services.push(gatt.createDeviceInfoService('My MFG', '0', '0000-0000', 'v0.01', 'v0.01', 'v0.01', 'My BLE Device'));
 var peripheral = Peripheral.create('My BLE Device', services);
 
-// Start advertising
-var advOptions = {flags: Peripheral.AdvertisementFlags.LIMITED_DISCOVERABLE | Peripheral.AdvertisementFlags.BR_EDR_NOT_SUPPORTED,
-            completeName: 'foo'};
-peripheral.advertise(advOptions, advOptions);
-
-// Listen for incoming connections
-peripheral.listen({source: 'hci0'}, function(err, central) {
-  if (err) {
-    return console.log(err);
-  }
-
+// Connection handler
+peripheral.on('connect', function(central) {
   console.log("Got connection!!!");
-  /*
-  central.on('data', function(data) {
-    console.log(data);
-  });
-  */
+  peripheral.stopAdvertising();
 });
+
+peripheral.on('error', function(err) {
+  console.log(err);
+}
+
+function advertiseAndListen() {
+  // Start advertising
+  var advOptions = {flags: Peripheral.AdvertisementFlags.LIMITED_DISCOVERABLE | Peripheral.AdvertisementFlags.BR_EDR_NOT_SUPPORTED,
+              completeName: 'foo'};
+  peripheral.advertise(advOptions, advOptions);
+
+  // Listen for incoming connections
+  peripheral.listen();
+}
+
+// When the central closes the connection, start advertising again
+peripheral.on('close', advertiseAndListen());
+
+advertiseAndListen();

@@ -91,33 +91,26 @@ Central::Listen(const Arguments& args)
   HandleScope scope;
   if (debug) printf("Central::Listen\n");
 
-  if (args.Length() < 1) {
-    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
-    return scope.Close(Undefined());
-  }
-
-  if (!args[0]->IsObject() && !args[0]->IsNull()) {
-    ThrowException(Exception::TypeError(String::New("First argument must be either listen options or a callback")));
-    return scope.Close(Undefined());
-  }
-
   Local<Object> options;
   Central* central = ObjectWrap::Unwrap<Central>(args.This());
 
-  if (args[0]->IsFunction()) {
-    central->connectionCallback = Persistent<Function>::New(Local<Function>::Cast(args[0]));
-    options = Object::New();
-  } else {
-    if (args.Length() < 2) {
-      ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+  if (args.Length() > 0) {
+    if (args[0]->IsFunction()) {
+      central->connectionCallback = Persistent<Function>::New(Local<Function>::Cast(args[0]));
+      options = Object::New();
+    } else if (args[0]->IsObject()) {
+      options = args[0]->ToObject();
+      if (args.Length() > 1) {
+        if (!args[1]->IsFunction()) {
+          ThrowException(Exception::TypeError(String::New("Second argument must be a callback")));
+          return scope.Close(Undefined());
+        }
+        central->connectionCallback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
+      }
+    } else {
+      ThrowException(Exception::TypeError(String::New("First argument must be either listen options or a callback")));
       return scope.Close(Undefined());
     }
-    if (!args[1]->IsFunction()) {
-      ThrowException(Exception::TypeError(String::New("Second argument must be a callback")));
-      return scope.Close(Undefined());
-    }
-    options = args[0]->ToObject();
-    central->connectionCallback = Persistent<Function>::New(Local<Function>::Cast(args[1]));
   }
 
   struct set_opts opts;
@@ -173,17 +166,29 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 
     uv_read_start((uv_stream_t*) central->tcp, onAlloc, onRead);
 
-    // Call the provided callback
-    const int argc = 2;
-    Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(central->self) };
-    central->connectionCallback->Call(central->self, argc, argv);
+    if (central->connectionCallback) {
+      // Call the provided callback
+      const int argc = 2;
+      Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(central->self) };
+      central->connectionCallback->Call(central->self, argc, argv);
+    } else {
+      const int argc = 2;
+      Local<Value> argv[argc] = { String::New("connect"), Local<Value>::New(central->self) };
+      MakeCallback(central->self, "emit", argc, argv);
+    }
   } else {
-    // Call the provided callback with the error
     uv_err_t err = uv_last_error(uv_default_loop());
-    const int argc = 2;
     Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
-    Local<Value> argv[argc] = { error, Local<Value>::New(central->self) };
-    central->connectionCallback->Call(central->self, argc, argv);
+    if (central->connectionCallback) {
+      // Call the provided callback with the error
+      const int argc = 2;
+      Local<Value> argv[argc] = { error, Local<Value>::New(central->self) };
+      central->connectionCallback->Call(central->self, argc, argv);
+    } else {
+      const int argc = 2;
+      Local<Value> argv[argc] = { String::New("error"), error };
+      MakeCallback(central->self, "emit", argc, argv);
+    }
   }
   if (debug) printf("Central::onConnect returning, tcp = %p\n", central->tcp);
 }
@@ -207,6 +212,17 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   // nread < 0 signals an error
   if (nread < 0) {
     uv_read_stop(stream);
+    uv_err_t err = uv_last_error(uv_default_loop());
+    if (err == UV_EOF) {
+      const int argc = 1;
+      Local<Value> argv[argc] = { String::New("close") };
+      MakeCallback(central->self, "emit", argc, argv);
+    } else {
+      Local<Value> error = ErrnoException(errno, "read", uv_strerror(err));
+      const int argc = 2;
+      Local<Value> argv[argc] = { String::New("error"), error };
+      MakeCallback(central->self, "emit", argc, argv);
+    }
   } else if (nread > 0) {
     Buffer* buffer = Buffer::New(nread);
     memcpy(Buffer::Data(buffer), buf.base, nread);
