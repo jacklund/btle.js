@@ -17,7 +17,7 @@ peripheral.on('connect', function(central) {
 
 peripheral.on('error', function(err) {
   console.log(err);
-}
+});
 
 function advertiseAndListen() {
   // Start advertising
@@ -30,6 +30,6 @@ function advertiseAndListen() {
 }
 
 // When the central closes the connection, start advertising again
-peripheral.on('close', advertiseAndListen());
+peripheral.on('close', advertiseAndListen);
 
 advertiseAndListen();

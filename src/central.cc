@@ -166,7 +166,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 
     uv_read_start((uv_stream_t*) central->tcp, onAlloc, onRead);
 
-    if (central->connectionCallback) {
+    if (central->connectionCallback.IsEmpty()) {
       // Call the provided callback
       const int argc = 2;
       Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(central->self) };
@@ -179,7 +179,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
   } else {
     uv_err_t err = uv_last_error(uv_default_loop());
     Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
-    if (central->connectionCallback) {
+    if (central->connectionCallback.IsEmpty()) {
       // Call the provided callback with the error
       const int argc = 2;
       Local<Value> argv[argc] = { error, Local<Value>::New(central->self) };
@@ -213,7 +213,7 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (nread < 0) {
     uv_read_stop(stream);
     uv_err_t err = uv_last_error(uv_default_loop());
-    if (err == UV_EOF) {
+    if (err.code == UV_EOF) {
       const int argc = 1;
       Local<Value> argv[argc] = { String::New("close") };
       MakeCallback(central->self, "emit", argc, argv);

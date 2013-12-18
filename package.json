@@ -11,9 +11,9 @@
     "type": "git",
     "url": "git://github.com/jacklund/btle.js.git"
   },
-  "dependencies": [
+  "dependencies": {
     "buffertools": "1.1.1"
-  ],
+  },
   "keywords": [
     "bluetooth",
     "bluetooth_le"
