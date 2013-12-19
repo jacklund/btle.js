@@ -85,15 +85,29 @@ Central::SetMTU(const Arguments& args)
   return scope.Close(Undefined());
 }
 
+//
+// Listen method. On successful connection, initiates reading from the
+// socket.
+// 
+// Arguments:
+//   options (Object, optional): listen options
+//   callback (Function, optional): callback to call on connect
+// Events:
+//   'connect': emitted on connection if no callback is specified
+//   'error': emitted on an error if no callback is specified
+//   'data': emitted when data is read from the socket
+//
 Handle<Value>
 Central::Listen(const Arguments& args)
 {
   HandleScope scope;
   if (debug) printf("Central::Listen\n");
 
-  Local<Object> options;
+  // Grab the object
   Central* central = ObjectWrap::Unwrap<Central>(args.This());
 
+  // Parse the arguments
+  Local<Object> options;
   if (args.Length() > 0) {
     if (args[0]->IsFunction()) {
       central->connectionCallback = Persistent<Function>::New(Local<Function>::Cast(args[0]));
@@ -113,6 +127,7 @@ Central::Listen(const Arguments& args)
     }
   }
 
+  // Set the listen options
   struct set_opts opts;
   if (!setOpts(opts, options)) {
     return scope.Close(Undefined());
@@ -125,6 +140,7 @@ Central::Listen(const Arguments& args)
     throw BTLEException("Error creating socket", errno);
   }
 
+  // Start polling for incoming connection attempts
   central->poll_handle = new uv_poll_t;
   central->poll_handle->data = central;
   uv_poll_init_socket(uv_default_loop(), central->poll_handle, central->sock);
@@ -134,14 +150,22 @@ Central::Listen(const Arguments& args)
   return scope.Close(Undefined());
 }
 
+//
+// Handler for connections
+//
 void
 Central::onConnect(uv_poll_t* handle, int status, int events)
 {
   if (debug) printf("Central::onConnect, status=%d, events=%.02x\n", status, events);
+
+  // Stop polling for connections
   uv_poll_stop(handle);
   uv_close((uv_handle_t*) handle, onClose);
+
+  // Grab the object
   Central* central = (Central*) handle->data;
   if (status == 0) {
+    // Accept the connection
     int cli_sock = accept(central->sock, NULL, NULL);
     if (cli_sock < 0) {
       printf("Error on accept, errno = %d\n", errno);
@@ -149,6 +173,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
       if (debug) printf("cli_sock = %d\n", cli_sock);
     }
 
+    // Get some of the connect parameters
     bt_io_get(cli_sock,
 			BT_IO_OPT_SOURCE_BDADDR, &central->src,
 			BT_IO_OPT_DEST, &central->dst,
@@ -156,6 +181,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 			BT_IO_OPT_IMTU, &central->mtu,
 			BT_IO_OPT_INVALID);
     
+    // Wrap the socket in uv's tcp
     if (debug) printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
     central->poll_handle = new uv_poll_t;
     central->sock = cli_sock;
@@ -164,30 +190,33 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
     uv_tcp_open(central->tcp, central->sock);
     central->tcp->data = (void*) central;
 
+    // Start reading from the socket (really, polling for read)
     uv_read_start((uv_stream_t*) central->tcp, onAlloc, onRead);
 
     if (central->connectionCallback.IsEmpty()) {
+      // No callback - emit 'connect'
+      const int argc = 2;
+      Local<Value> argv[argc] = { String::New("connect"), Local<Value>::New(central->self) };
+      MakeCallback(central->self, "emit", argc, argv);
+    } else {
       // Call the provided callback
       const int argc = 2;
       Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(central->self) };
       central->connectionCallback->Call(central->self, argc, argv);
-    } else {
-      const int argc = 2;
-      Local<Value> argv[argc] = { String::New("connect"), Local<Value>::New(central->self) };
-      MakeCallback(central->self, "emit", argc, argv);
     }
   } else {
     uv_err_t err = uv_last_error(uv_default_loop());
     Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
     if (central->connectionCallback.IsEmpty()) {
+      // No callback - emit 'error'
+      const int argc = 2;
+      Local<Value> argv[argc] = { String::New("error"), error };
+      MakeCallback(central->self, "emit", argc, argv);
+    } else {
       // Call the provided callback with the error
       const int argc = 2;
       Local<Value> argv[argc] = { error, Local<Value>::New(central->self) };
       central->connectionCallback->Call(central->self, argc, argv);
-    } else {
-      const int argc = 2;
-      Local<Value> argv[argc] = { String::New("error"), error };
-      MakeCallback(central->self, "emit", argc, argv);
     }
   }
   if (debug) printf("Central::onConnect returning, tcp = %p\n", central->tcp);
