@@ -165,49 +165,58 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 
   // Grab the object
   Central* central = (Central*) handle->data;
+  int cli_sock = -1;
   if (status == 0) {
     // Accept the connection
-    int cli_sock = accept(central->sock, NULL, NULL);
-    if (cli_sock < 0) {
-      printf("Error on accept, errno = %d\n", errno);
-    } else {
-      if (debug) printf("cli_sock = %d\n", cli_sock);
+    cli_sock = accept(central->sock, NULL, NULL);
+    if (debug) printf("cli_sock = %d\n", cli_sock);
+    if (cli_sock >= 0) {
+      // Close the listen socket
+      close(central->sock);
+      central->sock = -1;
+
+      // Get some of the connect parameters
+      bt_io_get(cli_sock,
+        BT_IO_OPT_SOURCE_BDADDR, &central->src,
+        BT_IO_OPT_DEST, &central->dst,
+        BT_IO_OPT_CID, &central->cid,
+        BT_IO_OPT_IMTU, &central->mtu,
+        BT_IO_OPT_INVALID);
+      
+      // Wrap the socket in uv's tcp
+      if (debug) printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
+      central->poll_handle = new uv_poll_t;
+      central->sock = cli_sock;
+      central->tcp = new uv_tcp_t();
+      uv_tcp_init(uv_default_loop(), central->tcp);
+      uv_tcp_open(central->tcp, central->sock);
+      central->tcp->data = (void*) central;
+
+      // Start reading from the socket (really, polling for read)
+      uv_read_start((uv_stream_t*) central->tcp, onAlloc, onRead);
+
+      if (central->connectionCallback.IsEmpty()) {
+        // No callback - emit 'connect'
+        const int argc = 2;
+        Local<Value> argv[argc] = { String::New("connect"), Local<Value>::New(central->self) };
+        MakeCallback(central->self, "emit", argc, argv);
+      } else {
+        // Call the provided callback
+        const int argc = 2;
+        Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(central->self) };
+        central->connectionCallback->Call(central->self, argc, argv);
+      }
     }
+  }
+  if (status != 0 || cli_sock < 0) {
+    // Close the listen socket
+    close(central->sock);
+    central->sock = -1;
 
-    // Get some of the connect parameters
-    bt_io_get(cli_sock,
-			BT_IO_OPT_SOURCE_BDADDR, &central->src,
-			BT_IO_OPT_DEST, &central->dst,
-			BT_IO_OPT_CID, &central->cid,
-			BT_IO_OPT_IMTU, &central->mtu,
-			BT_IO_OPT_INVALID);
-    
-    // Wrap the socket in uv's tcp
-    if (debug) printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
-    central->poll_handle = new uv_poll_t;
-    central->sock = cli_sock;
-    central->tcp = new uv_tcp_t();
-    uv_tcp_init(uv_default_loop(), central->tcp);
-    uv_tcp_open(central->tcp, central->sock);
-    central->tcp->data = (void*) central;
-
-    // Start reading from the socket (really, polling for read)
-    uv_read_start((uv_stream_t*) central->tcp, onAlloc, onRead);
-
-    if (central->connectionCallback.IsEmpty()) {
-      // No callback - emit 'connect'
-      const int argc = 2;
-      Local<Value> argv[argc] = { String::New("connect"), Local<Value>::New(central->self) };
-      MakeCallback(central->self, "emit", argc, argv);
-    } else {
-      // Call the provided callback
-      const int argc = 2;
-      Local<Value> argv[argc] = { Local<Value>::New(Null()), Local<Value>::New(central->self) };
-      central->connectionCallback->Call(central->self, argc, argv);
-    }
-  } else {
+    // Get the error
     uv_err_t err = uv_last_error(uv_default_loop());
-    Local<Value> error = ErrnoException(errno, "connect", uv_strerror(err));
+    const char* errString = status != 0 ? "connect" : "accept";
+    Local<Value> error = ErrnoException(errno, errString, uv_strerror(err));
     if (central->connectionCallback.IsEmpty()) {
       // No callback - emit 'error'
       const int argc = 2;
@@ -244,7 +253,8 @@ Central::close()
   if (this->tcp) {
     if (debug) printf("Closing bluetooth connection\n");
     uv_close((uv_handle_t*) this->tcp, onClose);
-  } else if (this->poll_handle) {
+  }
+  if (this->poll_handle) {
     if (debug) printf("Closing poll handle\n");
     uv_close((uv_handle_t*) this->poll_handle, onClose);
   }
