@@ -14,7 +14,7 @@
     * Prep Write
     * Exec Write
 * ~~Get rid of type lookups in peripheral, in favor of linear search of handles array~~
-* Fix reconnect
+* ~~Fix reconnect~~
 * Clean up the debug logging
 * Clean up the requires
 * Figure out why access to hci0 requires root, but nothing else does
