@@ -165,6 +165,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
 
   // Grab the object
   Central* central = (Central*) handle->data;
+
   int cli_sock = -1;
   if (status == 0) {
     // Accept the connection
@@ -172,7 +173,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
     if (debug) printf("cli_sock = %d\n", cli_sock);
     if (cli_sock >= 0) {
       // Close the listen socket
-      close(central->sock);
+      ::close(central->sock);
       central->sock = -1;
 
       // Get some of the connect parameters
@@ -185,7 +186,6 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
       
       // Wrap the socket in uv's tcp
       if (debug) printf("dst = %s, cid = %d, mtu = %d\n", central->dst, central->cid, central->mtu);
-      central->poll_handle = new uv_poll_t;
       central->sock = cli_sock;
       central->tcp = new uv_tcp_t();
       uv_tcp_init(uv_default_loop(), central->tcp);
@@ -210,7 +210,7 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
   }
   if (status != 0 || cli_sock < 0) {
     // Close the listen socket
-    close(central->sock);
+    ::close(central->sock);
     central->sock = -1;
 
     // Get the error
