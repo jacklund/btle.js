@@ -19,3 +19,4 @@
 * Clean up the requires
 * Figure out why access to hci0 requires root, but nothing else does
 * Remove all Bluez code
+* Run valgrind on code
