@@ -31,6 +31,9 @@ function advertiseAndListen() {
 }
 
 // When the central closes the connection, start advertising again
-peripheral.on('close', advertiseAndListen);
+peripheral.on('close', function() {
+  console.log('Got close event, readvertising');
+  advertiseAndListen();
+});
 
 advertiseAndListen();

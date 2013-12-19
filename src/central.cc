@@ -35,6 +35,7 @@ Central::Init(Handle<Object> exports)
   NODE_SET_PROTOTYPE_METHOD(t, "write", Central::Write);
   NODE_SET_PROTOTYPE_METHOD(t, "getMTU", Central::GetMTU);
   NODE_SET_PROTOTYPE_METHOD(t, "setMTU", Central::SetMTU);
+  NODE_SET_PROTOTYPE_METHOD(t, "close", Central::Close);
 
   exports->Set(String::NewSymbol("CentralInterface"), t->GetFunction());
 }
@@ -222,6 +223,33 @@ Central::onConnect(uv_poll_t* handle, int status, int events)
   if (debug) printf("Central::onConnect returning, tcp = %p\n", central->tcp);
 }
 
+Handle<Value>
+Central::Close(const Arguments& args)
+{
+  HandleScope scope;
+  if (debug) printf("Central::Close\n");
+
+  // Grab the object
+  Central* central = ObjectWrap::Unwrap<Central>(args.This());
+
+  central->close();
+
+  if (debug) printf("Central::Close returning\n");
+  return scope.Close(Undefined());
+}
+
+void
+Central::close()
+{
+  if (this->tcp) {
+    if (debug) printf("Closing bluetooth connection\n");
+    uv_close((uv_handle_t*) this->tcp, onClose);
+  } else if (this->poll_handle) {
+    if (debug) printf("Closing poll handle\n");
+    uv_close((uv_handle_t*) this->poll_handle, onClose);
+  }
+}
+
 //
 // libuv allocation callback
 //
@@ -242,10 +270,12 @@ Central::onRead(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (nread < 0) {
     uv_read_stop(stream);
     uv_err_t err = uv_last_error(uv_default_loop());
-    if (err.code == UV_EOF) {
+    printf("err code = %d, sys_errno_ = %d\n", err.code, err.sys_errno_);
+    if (err.code == UV_ECONNRESET) {
       const int argc = 1;
-      Local<Value> argv[argc] = { String::New("close") };
+      Local<Value> argv[argc] = { String::New("remoteClose") };
       MakeCallback(central->self, "emit", argc, argv);
+      central->close();
     } else {
       Local<Value> error = ErrnoException(errno, "read", uv_strerror(err));
       const int argc = 2;
@@ -267,8 +297,18 @@ Central::onClose(uv_handle_t* handle)
 {
   if (debug) printf("Central::onClose\n");
   Central* central = static_cast<Central*>(handle->data);
-  delete handle;
-  if (((uv_poll_t*) handle) == central->poll_handle) central->poll_handle = NULL;
+  if (((uv_tcp_t*) handle) == central->tcp) {
+    if (debug) printf("Bluetooth handle closed\n");
+    delete central->tcp;
+    central->tcp = NULL;
+    const int argc = 1;
+    Local<Value> argv[argc] = { String::New("close") };
+    MakeCallback(central->self, "emit", argc, argv);
+  } else if (((uv_poll_t*) handle) == central->poll_handle) {
+    if (debug) printf("Poll handle closed\n");
+    delete central->poll_handle;
+    central->poll_handle = NULL;
+  }
   if (debug) printf("Central::onClose returning\n");
 }
 

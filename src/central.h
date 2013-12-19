@@ -16,6 +16,7 @@ public:
   static v8::Handle<v8::Value> Write(const v8::Arguments& args);
   static v8::Handle<v8::Value> SetMTU(const v8::Arguments& args);
   static v8::Handle<v8::Value> GetMTU(const v8::Arguments& args);
+  static v8::Handle<v8::Value> Close(const v8::Arguments& args);
 
 private:
   static v8::Persistent<v8::Function> constructor;
@@ -29,6 +30,7 @@ private:
   uv_stream_t* getStream() { return (uv_stream_t*) tcp; }
 
   void write(char* data, size_t len, void* wd);
+  void close();
 
   int sock;
 	bdaddr_t src;
