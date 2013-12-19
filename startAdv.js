@@ -17,6 +17,7 @@ peripheral.on('connect', function(central) {
 
 peripheral.on('error', function(err) {
   console.log(err);
+  advertiseAndListen();
 });
 
 function advertiseAndListen() {
