@@ -1,6 +1,8 @@
 var btle = require('./lib/btle');
+var characteristic = require('./lib/characteristic');
 var gatt = require('./lib/gatt');
 var Peripheral = require('./lib/peripheral');
+var service = require('./lib/service');
 
 btle.setDebug(true);
 
@@ -8,7 +10,7 @@ btle.setDebug(true);
 var services = [];
 services.push(gatt.createDeviceInfoService('My MFG', '0', '0000-0000', 'v0.01', 'v0.01', 'v0.01', 'My BLE Device'));
 var characteristics = [];
-characteristics.push(characteristic.create(null, characteristic.READ | characteristic.WRITE, 0xAA01, 0));
+characteristics.push(characteristic.create(null, characteristic.Properties.READ | characteristic.Properties.WRITE, 0xAA01, 0));
 services.push(service.create(null, 0xAA00, null, characteristics, peripheral));
 var peripheral = Peripheral.create('My BLE Device', services);
 
