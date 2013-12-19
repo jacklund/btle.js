@@ -9,10 +9,12 @@
     * Read Blob
     * Read Multi
     * ~~Read by Group~~
-    * Write
-    * Write Cmd
+    * ~~Write~~
+    * ~~Write Cmd~~
     * Prep Write
     * Exec Write
+    * ~~Handle Value Confirmation~~
+    * Signed Write
 * ~~Get rid of type lookups in peripheral, in favor of linear search of handles array~~
 * ~~Fix reconnect~~
 * Clean up the debug logging
