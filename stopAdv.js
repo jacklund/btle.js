@@ -1,2 +1,2 @@
-var btle = require('./lib/btle');
-btle.stopAdvertising();
+var peripheral = require('./lib/peripheral');
+peripheral.stopAdvertising();
