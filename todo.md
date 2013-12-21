@@ -18,6 +18,7 @@
 * ~~Get rid of type lookups in peripheral, in favor of linear search of handles array~~
 * ~~Fix reconnect~~
 * ~~Have characteristics emit event when value is written externally~~
+* Move ATT handlers from peripheral.js to att.js
 * Have characteristics notify/indicate when value is written internally
 * Clean up the debug logging
 * Clean up the requires
